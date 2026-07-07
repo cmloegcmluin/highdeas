@@ -1,0 +1,13 @@
+[project]
+name = "voicememo"
+version = "0.1.0"
+description = "Local pipeline that ingests iPhone voice-memo recordings, transcribes them locally, and routes each to Notesnook or Google Drive."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
