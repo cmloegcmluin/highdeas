@@ -5,6 +5,7 @@ description = "Local pipeline that ingests iPhone voice-memo recordings, transcr
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3",
+    "pywebview>=5",
     "requests>=2",
     "python-dotenv>=1",
     "python-docx>=1",

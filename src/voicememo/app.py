@@ -35,8 +35,27 @@ def build_app():
 
 
 def main():
-    port = int(os.environ.get("VOICE_PORT", "5000"))
     app = build_app()
+    if os.environ.get("VOICE_DESKTOP", "1") == "1" and _run_desktop(app):
+        return
+    _run_browser(app)
+
+
+def _run_desktop(app):
+    """Open the app in its own native window (Edge WebView2). False if unavailable."""
+    try:
+        import webview
+
+        webview.create_window("Voice Memos", app, width=1360, height=900)
+        webview.start()
+        return True
+    except Exception as exc:  # noqa: BLE001 — any failure should fall back to the browser
+        print(f"Native window unavailable ({exc}); opening in the browser instead.")
+        return False
+
+
+def _run_browser(app):
+    port = int(os.environ.get("VOICE_PORT", "5000"))
     if os.environ.get("VOICE_OPEN_BROWSER", "1") == "1":
         threading.Timer(1.5, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
     app.run(port=port)

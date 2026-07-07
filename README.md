@@ -15,11 +15,11 @@ Turns iPhone voice memos into finished notes with almost no manual work.
 
 ## Status
 
-Working review app: capture → ingest → local transcription → a local web page where you play each memo, edit its transcript, name it, pick Notesnook or Drive, submit, or delete. Submitting a **Notesnook** memo creates a real note via the Inbox API; a **Drive/music** memo moves the recording into a dated `..._NOT_YET_PROCESSED_MUSIC` folder under `voice memos (top level)` with an accompanying `.docx`. Either way — and on delete — the recording is retired **out of the inbox**: Drive to the Drive folder, Notesnook/delete to a local `bin/` (recoverable), so the inbox only ever holds unprocessed recordings. A **Bin tab** (`/bin`) lists binned items (deleted + Notesnook-processed) with their audio and a Restore button, and items past **90 days are auto-purged** (recording + record) whenever the app is used. Not yet wired: the multi-clip "one shared numbered doc" grouping, and a self-contained desktop build (it currently runs in the browser). Undo is covered for now by the Bin's Restore.
+Working review app: capture → ingest → local transcription → a local web page where you play each memo, edit its transcript, name it, pick Notesnook or Drive, submit, or delete. Submitting a **Notesnook** memo creates a real note via the Inbox API; a **Drive/music** memo moves the recording into a dated `..._NOT_YET_PROCESSED_MUSIC` folder under `voice memos (top level)` with an accompanying `.docx`. Either way — and on delete — the recording is retired **out of the inbox**: Drive to the Drive folder, Notesnook/delete to a local `bin/` (recoverable), so the inbox only ever holds unprocessed recordings. A **Bin tab** (`/bin`) lists binned items (deleted + Notesnook-processed) with their audio and a Restore button, and items past **90 days are auto-purged** (recording + record) whenever the app is used. It opens in its own **native window** (Edge WebView2), falling back to the browser if that's unavailable. Not yet wired: the multi-clip "one shared numbered doc" grouping, and a single-file standalone `.exe` (it still needs the project's Python/venv to launch). Undo is covered for now by the Bin's Restore.
 
 ## Run it
 
-Double-click **`Review Voice Memos.bat`** (or run `.venv/Scripts/python -m voicememo.app`). It opens the review page in your browser. The first open takes ~15s while the transcription model loads; after that it's quick.
+Double-click **`Review Voice Memos.bat`** (or run `.venv/Scripts/python -m voicememo.app`). It opens in its own **app window**. The first open takes ~15s while the transcription model loads; after that it's quick. (Set `VOICE_DESKTOP=0` to force browser mode.)
 
 ## Setup
 
