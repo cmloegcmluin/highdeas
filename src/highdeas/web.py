@@ -374,12 +374,21 @@ _PAGE_TAIL = """  </main>
 
   setTimeout(poll, POLL_MS);
 
-  // Manual "check now": the same inbox rescan the poll runs, on demand. Disable the
-  // button while the request is in flight so the run is visible and can't double-fire.
+  // Manual "check now": the same inbox rescan the poll runs, on demand. A local check
+  // returns almost instantly, so hold a "Loading…" label on the button for a beat —
+  // even when nothing new turns up — so the click visibly does something and can't
+  // double-fire. Whatever it finds still streams in through merge as usual.
+  var REFRESH_FEEDBACK_MS = 700;
   var refreshBtn = document.getElementById('refresh');
   if (refreshBtn) refreshBtn.addEventListener('click', function () {
+    if (refreshBtn.disabled) return;
     refreshBtn.disabled = true;
-    check().then(function () { refreshBtn.disabled = false; });
+    refreshBtn.textContent = 'Loading…';
+    var held = new Promise(function (done) { setTimeout(done, REFRESH_FEEDBACK_MS); });
+    Promise.all([check(), held]).then(function () {
+      refreshBtn.textContent = 'Refresh';
+      refreshBtn.disabled = false;
+    });
   });
 })();
 </script>

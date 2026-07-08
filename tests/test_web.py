@@ -180,6 +180,17 @@ def test_index_offers_a_manual_refresh_left_of_the_bin_link_even_when_empty(tmp_
     assert body.index('id="refresh"') < body.index('href="/bin"')
 
 
+def test_refresh_button_shows_a_loading_label_while_it_checks(tmp_path):
+    service = FakeService(pending=[])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    # Clicking Refresh swaps the label to a held "Loading…" then restores it, so a check
+    # that surfaces nothing new still visibly reacts (the fetch is otherwise instant).
+    assert "Loading" in body
+
+
 def test_pending_refreshes_and_renders_just_the_memo_rows(tmp_path):
     service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hello there")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
