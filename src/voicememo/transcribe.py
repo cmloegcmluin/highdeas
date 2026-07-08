@@ -54,10 +54,6 @@ class Transcriber:
             self._model = self._model_loader(self._model_name)
         return self._model
 
-    def warmup(self):
-        """Load the model now (it's otherwise lazy) so the first transcription is instant."""
-        self._get_model()
-
     def transcribe(self, audio_path):
         wav = self._decode(audio_path)
         return self._get_model().recognize(wav)

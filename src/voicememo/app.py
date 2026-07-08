@@ -33,9 +33,9 @@ def default_bin_dir(inbox_dir):
 APP_NAME = "Highdeas"
 APP_ICON = PROJECT_ROOT / "voicememo.ico"
 
-# Shown instantly in the native window while the model loads, so the user never
-# stares at a blank frame. Self-contained; the dark slate matches the window
-# background below so there's no white flash on open.
+# Shown instantly in the native window for the brief moment before the local server
+# accepts connections, so the user never stares at a blank frame. Self-contained; the
+# dark slate matches the window background below so there's no white flash on open.
 _SPLASH_HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><style>
   html, body { height: 100%; margin: 0; }
@@ -75,27 +75,35 @@ def build_app():
         route=Router(notesnook=notesnook, drive=drive),
     )
     app = create_app(service, inbox_dir=inbox_dir, bin_dir=bin_dir, drive_dir=drive_base)
-
-    def warmup():
-        """Load the model and transcribe any waiting memos so the first page is instant."""
-        transcriber.warmup()
-        service.refresh()
-
-    return app, warmup
+    return app, service
 
 
 def main():
     _set_windows_app_id()
-    app, warmup = build_app()
-    if os.environ.get("VOICE_DESKTOP", "1") == "1" and _run_desktop(app, warmup):
+    app, service = build_app()
+    _transcribe_in_background(service)
+    if os.environ.get("VOICE_DESKTOP", "1") == "1" and _run_desktop(app):
         return
     _run_browser(app)
 
 
-def _run_desktop(app, warmup):
-    """Open the app in its own native window (Edge WebView2), showing a splash until
-    the model is warm and the first page is ready. Returns False (so main falls back
-    to the browser) if pywebview is unavailable."""
+def _transcribe_in_background(service):
+    """Catch up on any waiting recordings off the UI thread, so the window opens
+    instantly and memos stream in as they finish transcribing (the /pending poll
+    surfaces them). A bad recording must never crash startup, so swallow errors."""
+    def run():
+        try:
+            service.refresh()
+        except Exception as exc:  # noqa: BLE001 — startup survives a bad recording
+            print(f"Background transcription failed ({exc}).")
+
+    threading.Thread(target=run, daemon=True, name="highdeas-transcribe").start()
+
+
+def _run_desktop(app):
+    """Open the app in its own native window (Edge WebView2), showing a splash only
+    until the local server accepts connections. Returns False (so main falls back to
+    the browser) if pywebview is unavailable."""
     try:
         import webview
     except Exception as exc:  # noqa: BLE001 — no GUI backend; fall back to the browser
@@ -118,7 +126,7 @@ def _run_desktop(app, warmup):
         # only" note is stale — see platforms/winforms.py.
         icon = str(APP_ICON) if APP_ICON.is_file() else None
         webview.start(
-            lambda: _open_when_ready(window, url, warmup, lambda: _wait_until_serving(port)),
+            lambda: _open_when_ready(window, url, lambda: _wait_until_serving(port)),
             icon=icon,
         )
         return True
@@ -127,12 +135,9 @@ def _run_desktop(app, warmup):
         return False
 
 
-def _open_when_ready(window, url, warmup, wait_until_ready):
-    """Warm the model, wait for the server, then swap the splash for the real app."""
-    try:
-        warmup()
-    except Exception as exc:  # noqa: BLE001 — never strand the user on the splash
-        print(f"Warmup failed ({exc}); loading the app anyway.")
+def _open_when_ready(window, url, wait_until_ready):
+    """Wait for the local server, then swap the splash for the real app. The model
+    load and backlog transcription happen in the background, never on this path."""
     wait_until_ready()
     window.load_url(url)
 

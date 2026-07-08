@@ -3,9 +3,10 @@ from voicememo.web import create_app
 
 
 class FakeService:
-    def __init__(self, pending=(), binned=()):
+    def __init__(self, pending=(), binned=(), incoming=False):
         self._pending = list(pending)
         self._binned = list(binned)
+        self._incoming = incoming
         self.refreshed = 0
         self.edits = []
         self.submitted = []
@@ -20,6 +21,9 @@ class FakeService:
 
     def pending(self):
         return self._pending
+
+    def has_incoming(self):
+        return self._incoming
 
     def edit(self, audio_filename, **fields):
         self.edits.append((audio_filename, fields))
@@ -46,13 +50,16 @@ class FakeService:
         self.restored_all += 1
 
 
-def test_index_refreshes_and_lists_pending(tmp_path):
+def test_index_lists_pending_without_blocking_on_a_refresh(tmp_path):
+    # The window opens instantly: the first paint renders whatever is already in the
+    # store and never blocks on a rescan or transcription. New recordings stream in
+    # afterwards via the background catch-up and the /pending poll.
     service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hello there")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     resp = client.get("/")
 
-    assert service.refreshed == 1
+    assert service.refreshed == 0
     assert resp.status_code == 200
     assert b"a.m4a" in resp.data
     assert b"hello there" in resp.data
@@ -99,6 +106,29 @@ def test_index_bulk_controls_sit_in_the_column_headers(tmp_path):
     assert 'class="bulk"' not in body
     assert 'id="submit-all"' in body and 'id="trash-all"' in body
     assert body.index('class="grid review"') < body.index('id="submit-all"')
+
+
+def test_index_shows_a_transcribing_hint_while_recordings_await(tmp_path):
+    # Opened with an empty store but recordings still waiting in the inbox, the page
+    # says they're being transcribed rather than the misleading "Nothing to review".
+    service = FakeService(pending=[], incoming=True)
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data
+
+    # The visible empty-state is the transcribing hint, not the idle message.
+    assert b"Transcribing your memos" in body
+    assert b'<p class="empty">Nothing to review' not in body
+
+
+def test_index_shows_nothing_to_review_when_the_inbox_is_idle(tmp_path):
+    service = FakeService(pending=[], incoming=False)
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data
+
+    assert b'<p class="empty">Nothing to review' in body
+    assert b"Transcribing" not in body
 
 
 def test_index_polls_the_pending_endpoint_to_stay_current(tmp_path):

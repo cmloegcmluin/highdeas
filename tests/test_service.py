@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 from voicememo.ingest import NewRecording, recording_key
@@ -349,6 +350,71 @@ def test_restore_all_returns_every_binned_item_to_the_review_page(tmp_path):
     assert len(store.list_by_status("pending")) == 2
     assert service.binned() == []
     assert sum(1 for _ in inbox.iterdir()) == 2  # both recordings back in the inbox
+
+
+def test_concurrent_refreshes_transcribe_each_recording_once(tmp_path):
+    """A refresh already in flight makes a second, overlapping refresh a no-op.
+
+    The client poll, the startup catch-up, and a second browser tab can all call
+    refresh at once. Two scans racing on the same inbox would otherwise transcribe
+    a recording twice — or crash renaming a file the other thread already moved."""
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"A")
+    store = MemoStore(tmp_path / "memos.db")
+
+    inside = threading.Event()
+    release = threading.Event()
+
+    class GatedTranscriber:
+        def __init__(self):
+            self.calls = 0
+
+        def transcribe(self, path):
+            self.calls += 1
+            inside.set()
+            release.wait(timeout=2)
+            return "text"
+
+    transcriber = GatedTranscriber()
+    service = ReviewService(
+        inbox_dir=inbox, store=store, transcriber=transcriber,
+        bin_dir=tmp_path / "bin", clock=lambda: "2026-07-07T00:00",
+        recorded_time=lambda path: "2026-07-07T00:00",
+    )
+
+    first = threading.Thread(target=service.refresh)
+    first.start()
+    assert inside.wait(timeout=2)  # the first refresh is mid-transcription, holding the guard
+
+    service.refresh()  # an overlapping refresh must skip, not transcribe the same file again
+
+    release.set()
+    first.join(timeout=2)
+
+    assert transcriber.calls == 1
+    assert len(store.list_by_status("pending")) == 1
+
+
+def test_has_incoming_is_true_when_the_inbox_holds_an_untranscribed_recording(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"A")
+    store = MemoStore(tmp_path / "memos.db")
+    service = ReviewService(inbox_dir=inbox, store=store,
+                            transcriber=FakeTranscriber(), bin_dir=tmp_path / "bin")
+
+    assert service.has_incoming() is True
+
+
+def test_has_incoming_is_false_when_the_inbox_is_drained(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    store = MemoStore(tmp_path / "memos.db")
+    service = ReviewService(inbox_dir=inbox, store=store,
+                            transcriber=FakeTranscriber(), bin_dir=tmp_path / "bin")
+
+    assert service.has_incoming() is False
 
 
 def test_purge_expired_removes_only_bin_items_past_retention(tmp_path):

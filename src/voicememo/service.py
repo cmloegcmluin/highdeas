@@ -1,5 +1,6 @@
 """Application service: turn the inbox into reviewable memos and route submissions."""
 import shutil
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -27,8 +28,23 @@ class ReviewService:
         self._route = route
         self._clock = clock
         self._recorded_time = recorded_time
+        self._refresh_lock = threading.Lock()
 
     def refresh(self):
+        """Ingest and transcribe any waiting recordings, skipping when a refresh is
+        already running. The client poll, the startup catch-up, and a second browser
+        tab can all land here at once; letting two scans race on the same inbox would
+        transcribe a recording twice, or crash renaming a file the other just moved.
+        The in-flight scan is already ingesting them, so the skipped caller loses
+        nothing — its next poll sees whatever landed."""
+        if not self._refresh_lock.acquire(blocking=False):
+            return
+        try:
+            self._ingest_waiting_recordings()
+        finally:
+            self._refresh_lock.release()
+
+    def _ingest_waiting_recordings(self):
         self.purge_expired()
         # A pending memo's audio already lives in the inbox under its own name, so
         # never re-ingest it. find_new keys by content: a memo stored under a raw
@@ -52,6 +68,13 @@ class ReviewService:
 
     def pending(self):
         return self._store.list_by_status("pending")
+
+    def has_incoming(self):
+        """True when the inbox holds recordings not yet in the store, so a freshly
+        opened page can say "Transcribing…" rather than "Nothing to review" while the
+        background catch-up works through them. A cheap directory scan — no model, no
+        decoding — so it's safe on the request path."""
+        return bool(self._find_new(self._inbox_dir, self._store.known_filenames()))
 
     def binned(self):
         """Processed/deleted memos whose recording sits in the local bin, newest first."""

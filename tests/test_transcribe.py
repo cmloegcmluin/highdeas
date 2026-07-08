@@ -100,23 +100,3 @@ def test_transcriber_lazy_loads_model_once(tmp_path):
     transcriber.transcribe(tmp_path / "b.m4a")
 
     assert load_calls == ["the-model"]  # loaded exactly once, by name
-
-
-def test_warmup_loads_model_eagerly_and_only_once(tmp_path):
-    load_calls = []
-
-    def fake_loader(name):
-        load_calls.append(name)
-        return FakeModel("hi")
-
-    transcriber = Transcriber(
-        model_loader=fake_loader,
-        model_name="the-model",
-        decode=lambda src: tmp_path / "x.wav",
-    )
-    assert load_calls == []  # nothing loaded at construction
-
-    transcriber.warmup()
-    transcriber.warmup()  # already warm — no second load
-
-    assert load_calls == ["the-model"]

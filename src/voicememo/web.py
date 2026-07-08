@@ -138,7 +138,11 @@ _PAGE_HEAD = """<!doctype html>
 # The reviewable-memo list on its own, so it can be rendered both inside the full
 # page and alone for the client's /pending poll (which splices in new rows).
 CONTENT_HTML = """{% if not memos %}
+    {% if incoming %}
+    <p class="empty">Transcribing your memos…</p>
+    {% else %}
     <p class="empty">Nothing to review. Record a memo and it'll show up here.</p>
+    {% endif %}
   {% else %}
   <div class="grid review">
     <div class="head">Audio</div>
@@ -383,8 +387,12 @@ def create_app(service, inbox_dir, bin_dir, drive_dir=None, open_folder=None):
 
     @app.get("/")
     def index():
-        service.refresh()
-        return render_template_string(INDEX_HTML, memos=service.pending())
+        # No rescan here: the page must paint instantly from what's already stored.
+        # The background catch-up transcribes waiting recordings and the /pending
+        # poll streams them in, so the first frame never waits on the model.
+        return render_template_string(
+            INDEX_HTML, memos=service.pending(), incoming=service.has_incoming()
+        )
 
     @app.get("/pending")
     def pending():
