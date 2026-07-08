@@ -204,11 +204,39 @@ def test_restore_moves_audio_back_to_inbox_and_marks_pending(tmp_path):
 
     ReviewService(inbox_dir=inbox, store=store, transcriber=FakeTranscriber(), bin_dir=bin_dir).restore("a.m4a")
 
-    assert (inbox / "a.m4a").read_bytes() == b"A"
-    assert not (bin_dir / "a.m4a").exists()
-    memo = store.get("a.m4a")
-    assert memo.status == "pending"
+    pending = store.list_by_status("pending")
+    assert len(pending) == 1
+    memo = pending[0]
     assert memo.processed_at == ""
+    assert not (bin_dir / "a.m4a").exists()  # left the bin
+    assert (inbox / memo.audio_filename).read_bytes() == b"A"  # back in the inbox, playable
+
+
+def test_restoring_a_legacy_named_memo_does_not_duplicate_it_on_the_next_refresh(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    store = MemoStore(tmp_path / "memos.db")
+    # A memo retired BEFORE content-keying: stored under its raw inbox name, its
+    # audio sitting in the bin under that same raw name.
+    store.upsert(Memo(audio_filename="voice-9.m4a", transcript="an idea",
+                      status="deleted", processed_at="2026-07-07T03:00"))
+    (bin_dir / "voice-9.m4a").write_bytes(b"AUDIO-BYTES")
+
+    service = ReviewService(inbox_dir=inbox, store=store,
+                            transcriber=FakeTranscriber(), bin_dir=bin_dir,
+                            clock=lambda: "2026-07-07T09:00")
+    service.restore("voice-9.m4a")
+    service.refresh()  # the page reload that re-scans the inbox
+
+    pending = store.list_by_status("pending")
+    assert len(pending) == 1  # one memo restored, not two copies
+    memo = pending[0]
+    assert memo.transcript == "an idea"  # the original memo, not a fresh re-ingest
+    # Its audio is on disk under the memo's stored filename, so it still plays.
+    assert (inbox / memo.audio_filename).read_bytes() == b"AUDIO-BYTES"
+    assert not (inbox / "voice-9.m4a").exists()  # nothing left under the raw name
 
 
 def test_purge_expired_removes_only_bin_items_past_retention(tmp_path):

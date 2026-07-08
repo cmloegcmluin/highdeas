@@ -100,6 +100,19 @@ def test_store_is_usable_from_another_thread(tmp_path):
     assert result["names"] == {"a.m4a"}
 
 
+def test_rekey_changes_the_primary_key_keeping_other_fields(tmp_path):
+    store = MemoStore(tmp_path / "memos.db")
+    store.upsert(Memo(audio_filename="raw.m4a", transcript="t", name="n", status="deleted"))
+
+    store.rekey("raw.m4a", "raw-abc123abc123.m4a")
+
+    assert store.get("raw.m4a") is None
+    memo = store.get("raw-abc123abc123.m4a")
+    assert memo.transcript == "t"
+    assert memo.name == "n"
+    assert memo.status == "deleted"
+
+
 def test_remove_deletes_the_record(tmp_path):
     store = MemoStore(tmp_path / "memos.db")
     store.upsert(Memo(audio_filename="a.m4a"))

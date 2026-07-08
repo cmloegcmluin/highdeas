@@ -3,7 +3,7 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from voicememo.ingest import find_new_recordings, recording_time
+from voicememo.ingest import find_new_recordings, recording_key, recording_time
 from voicememo.store import Memo
 
 
@@ -64,10 +64,21 @@ class ReviewService:
         self._store.update(audio_filename, status="deleted", processed_at=self._clock())
 
     def restore(self, audio_filename):
+        """Bring a binned recording back into the inbox as a pending memo.
+
+        Realign the memo and its file with the recording's content key on the way
+        in: a memo retired before content-keying is stored under its raw inbox
+        name, and refresh() would then re-key the restored audio and adopt it as a
+        second, brand-new pending memo — the restored item showed up twice."""
+        landed = Path(self._inbox_dir) / audio_filename
         source = Path(self._bin_dir) / audio_filename
         if source.exists():
-            shutil.move(str(source), str(Path(self._inbox_dir) / audio_filename))
-        self._store.update(audio_filename, status="pending", processed_at="")
+            shutil.move(str(source), str(landed))
+        key = recording_key(landed) if landed.exists() else audio_filename
+        if key != audio_filename:
+            landed.replace(Path(self._inbox_dir) / key)
+            self._store.rekey(audio_filename, key)
+        self._store.update(key, status="pending", processed_at="")
 
     def purge_expired(self, *, retention_days=90):
         """Forget bin items older than the retention window: delete the audio and the record."""

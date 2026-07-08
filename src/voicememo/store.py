@@ -78,6 +78,15 @@ class MemoStore:
             )
             self._conn.commit()
 
+    def rekey(self, old_filename, new_filename):
+        """Move a memo to a new audio_filename (its primary key), keeping the rest."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE memos SET audio_filename = ? WHERE audio_filename = ?",
+                (new_filename, old_filename),
+            )
+            self._conn.commit()
+
     def remove(self, audio_filename):
         with self._lock:
             self._conn.execute("DELETE FROM memos WHERE audio_filename = ?", (audio_filename,))
