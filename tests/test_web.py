@@ -627,12 +627,27 @@ def test_a_column_of_submits_and_its_bulk_head_wear_the_same_glyph(tmp_path):
     # same way — one paper plane over a column of them, one bin over a column of bins.
     assert 'id="submit-all" class="btn head-btn" title="Submit all" aria-label="Submit all"' in body
     assert 'id="trash-all" class="btn head-btn danger" title="Trash all" aria-label="Trash all"' in body
-    assert 'class="go" title="Submit" aria-label="Submit"' in body
+    assert 'class="btn go" title="Submit" aria-label="Submit"' in body
     assert ">Submit all<" not in body and ">Trash all<" not in body
     assert ">Submit</button>" not in body
-    assert ".head-btn svg" in css and ".go svg" in css
-    # The editor's primary button shares .go and still speaks: it is the only one left.
+    assert ".head-btn svg" in css and ".memo .go svg" in css
+    # The editor's button still speaks: it is the only one left with a word to say.
     assert ">Done</button>" in body
+
+
+def test_a_rows_submit_wears_the_outline_chrome_its_bulk_head_wears(tmp_path):
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+    css = asset(client, "app.css")
+
+    # A solid blue Submit on every row shouted the same thing down the whole list. It
+    # takes the app's one outline chrome, and colors on hover like the head above it.
+    assert 'class="btn go" title="Submit" aria-label="Submit"' in body
+    # One filled button is left in the app: the dialog's single way out.
+    filled = [rule for rule in css.split("}") if "background: #3b82f6" in rule]
+    assert len(filled) == 1 and ".editor-done" in filled[0], filled
 
 
 def test_every_inbox_row_is_the_same_height_whether_or_not_it_has_a_transcript(tmp_path):

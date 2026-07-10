@@ -178,10 +178,12 @@ h1 { font-size: 1.35rem; margin: 0; }
               padding: 8px; border-radius: 10px; background: Canvas;
               border: 1px solid #3b82f6; box-shadow: 0 12px 28px rgba(0,0,0,.35); }
 .memo button:disabled { cursor: default; }
-/* The row's two icon buttons stay dimmed until hovered, so they sit quietly beside
-   the filled Submit rather than competing with it. */
-.memo .move, .memo .del { width: 100%; opacity: .45;
+/* The row's three buttons — chevron, Submit, bin — wear the app's one outline chrome.
+   Submit keeps its full weight, being what the row is for; the two either side of it
+   sit dimmed until reached for, so a list of rows reads as text and not as buttons. */
+.memo .go, .memo .move, .memo .del { width: 100%;
                           transition: opacity .15s, color .15s, border-color .15s; }
+.memo .move, .memo .del { opacity: .45; }
 .memo .move:not(:disabled):hover, .memo .del:not(:disabled):hover { opacity: 1; }
 /* One chevron, turned around once the transcript is empty so it points the way the name
    is about to travel back; with both cells empty it has no move to offer and fades out
@@ -191,15 +193,9 @@ h1 { font-size: 1.35rem; margin: 0; }
 .memo .move svg { width: 20px; height: 20px; display: block; transition: transform .15s; }
 .memo .move.back svg { transform: rotate(180deg); }
 .memo .move:disabled { opacity: .15; }
-.memo .del { padding: 9px 0; }
-.memo .del svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
-/* The one filled button in the app — the primary action of a row and of the editor. The
-   row's is a paper plane, matching the head that presses every one of them; the editor's
-   is the only .go still wearing a word. */
-.go { font: inherit; padding: 9px 0; width: 100%; border-radius: 8px; border: none;
-      background: #3b82f6; color: #fff; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; }
-.go svg { width: 17px; height: 17px; display: block; }
+/* The paper plane and the bin, each matching the head that presses its whole column. */
+.memo .go, .memo .del { padding: 9px 0; }
+.memo .go svg, .memo .del svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
 /* The destination picker: three radio-backed brand icons; the checked one is lit,
    the rest sit dimmed (half-lit on hover). */
 .route-cell { display: flex; flex-direction: column; gap: 6px; }
@@ -298,4 +294,7 @@ h1 { font-size: 1.35rem; margin: 0; }
 ::highlight(spoken) { background-color: rgba(250, 204, 21, .45); }
 
 .editor-foot { display: flex; justify-content: flex-end; }
-.editor-foot .go { width: 120px; }
+/* The one filled button left in the app. A dialog has a single way out of it, said once
+   and in one place — nothing else on the page is competing to be pressed. */
+.editor-done { font: inherit; width: 120px; padding: 9px 0; border-radius: 8px; border: none;
+               background: #3b82f6; color: #fff; cursor: pointer; }
