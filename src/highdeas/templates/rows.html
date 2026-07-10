@@ -34,7 +34,10 @@
       <div class="transcript" role="button" tabindex="0" title="Open the editor" aria-label="Edit transcript">{{ m.transcript }}</div>
       {{ clip('transcript') }}
     </div>
-    <button type="button" class="btn move" title="Move transcript into Name" aria-label="Move transcript into Name">&rsaquo;</button>
+    {#- Bare on purpose: which way this arrow points depends on which of the two cells
+        it sits between currently holds the text, and that changes as the note is
+        edited. inbox.js gives it its arrow and its label, and keeps them honest. -#}
+    <button type="button" class="btn move"></button>
     <div class="cell oneline">
       <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
       {{ clip('name') }}

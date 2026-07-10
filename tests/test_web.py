@@ -161,6 +161,27 @@ def test_inbox_js_sends_the_picker_fields_and_toggles_the_dropdown(tmp_path):
     assert "radio.value !== 'asana'" in js
 
 
+def test_the_move_button_points_the_way_the_text_will_travel(tmp_path):
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+    js = asset(client, "inbox.js")
+
+    # Which way the arrow points is a fact about what's in the two cells right now, so
+    # the row ships the button bare and inbox.js gives it its arrow: right while the
+    # transcript has something to give, left once it's empty and the name is holding it.
+    # Baking a direction into the HTML would let it disagree with the cells after a move.
+    assert 'class="btn move"' in body
+    assert "Move transcript into Name" not in body
+    assert "'›'" in js and "'Move transcript into Name'" in js
+    assert "'‹'" in js and "'Move name into Transcript'" in js
+    # And with both cells empty there is no move to make, either way — a disabled arrow
+    # has to fade past the resting dim the row's icon buttons already sit at.
+    assert "btn.disabled" in js
+    assert ".memo .move:disabled" in asset(client, "app.css")
+
+
 def test_inbox_transcript_has_a_copy_to_clipboard_button(tmp_path):
     service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()

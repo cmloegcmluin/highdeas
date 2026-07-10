@@ -54,12 +54,15 @@
 
   function urlFor(prefix, memo) { return prefix + encodeURIComponent(memo.dataset.file); }
 
-  function transcriptOf(memo) { return memo.querySelector('.transcript').textContent; }
+  function previewOf(memo) { return memo.querySelector('.transcript'); }
+  function nameField(memo) { return memo.querySelector('input[name=name]'); }
+  function transcriptOf(memo) { return previewOf(memo).textContent; }
+  function nameOf(memo) { return nameField(memo).value; }
 
   function fields(memo) {
     var parent = memo.querySelector('select.asana-parent');
     return new URLSearchParams({
-      name: memo.querySelector('input[name=name]').value,
+      name: nameOf(memo),
       transcript: transcriptOf(memo),
       route: memo.querySelector('input.route:checked').value,
       asana_parent: parent ? parent.value : '',
@@ -76,6 +79,35 @@
   }
 
   function flush(memo) { clearTimeout(memo._timer); return save(memo); }
+
+  // ---- The button between Transcript and Name --------------------------------
+  // It always points the way the text is about to travel: right while the transcript
+  // has something to give, left once it's empty and the name is the one holding it.
+  // Deriving that from the two cells rather than remembering which way it was last
+  // clicked is what stops the arrow from ever offering a move that isn't there.
+  function movesBack(memo) { return !transcriptOf(memo).trim(); }
+
+  function syncMove(memo) {
+    var btn = memo.querySelector('.move');
+    var back = movesBack(memo);
+    var label = back ? 'Move name into Transcript' : 'Move transcript into Name';
+    btn.textContent = back ? '‹' : '›';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.disabled = back && !nameOf(memo).trim();
+  }
+
+  function setText(memo, name, transcript) {
+    nameField(memo).value = name;
+    previewOf(memo).textContent = transcript;
+    syncMove(memo);
+  }
+
+  function moveText(memo) {
+    if (movesBack(memo)) setText(memo, '', nameOf(memo));
+    else setText(memo, transcriptOf(memo), '');
+    flush(memo);
+  }
 
   function showEmpty() {
     var p = document.createElement('p');
@@ -164,8 +196,7 @@
   // the row has carried all along, and the cell becomes a drop target.
   function becomeGroup(memo, result) {
     clearTimeout(memo._timer);
-    memo.querySelector('.transcript').textContent = result.transcript;
-    memo.querySelector('input[name=name]').value = result.name;
+    setText(memo, result.name, result.transcript);
     memo.querySelector('.pick').checked = false;
     memo.dataset.kind = 'group';
   }
@@ -298,16 +329,13 @@
 
   function openEditor(memo) {
     if (memo.classList.contains('sending') || !window.HighdeasEditor) return;
-    var name = memo.querySelector('input[name=name]');
-    var preview = memo.querySelector('.transcript');
     window.HighdeasEditor.open({
       audioUrl: urlFor('/audio/', memo),
-      name: name.value,
+      name: nameOf(memo),
       transcript: transcriptOf(memo),
       words: wordsOf(memo),
       onChange: function (note) {
-        name.value = note.name;
-        preview.textContent = note.transcript;
+        setText(memo, note.name, note.transcript);
         scheduleSave(memo);
       },
     });
@@ -316,10 +344,7 @@
   // Copy a cell's text to the clipboard and hold a check on its button for a beat —
   // the clipboard gives no sign of its own that the copy landed.
   var COPIED_MS = 1200;
-  var COPY_SOURCES = {
-    transcript: transcriptOf,
-    name: function (memo) { return memo.querySelector('input[name=name]').value; },
-  };
+  var COPY_SOURCES = { transcript: transcriptOf, name: nameOf };
 
   function writeClipboard(text) {
     try {
@@ -341,10 +366,11 @@
   }
 
   function wire(memo) {
-    var preview = memo.querySelector('.transcript');
-    var name = memo.querySelector('input[name=name]');
+    var preview = previewOf(memo);
+    var name = nameField(memo);
     var parent = memo.querySelector('select.asana-parent');
     var handle = memo.querySelector('.num');
+    syncMove(memo);
     memo.querySelector('.pick').addEventListener('change', syncSelection);
     preview.addEventListener('click', function () { openEditor(memo); });
     preview.addEventListener('keydown', function (event) {
@@ -352,7 +378,8 @@
       event.preventDefault();
       openEditor(memo);
     });
-    name.addEventListener('input', function () { scheduleSave(memo); });
+    // Typing a name is the one thing that can wake a button left with nothing to move.
+    name.addEventListener('input', function () { syncMove(memo); scheduleSave(memo); });
     name.addEventListener('blur', function () { flush(memo); });
     // Lighting a destination icon saves it; the parent-task dropdown only matters
     // (and only shows) while the lit icon is Asana's.
@@ -378,11 +405,7 @@
       if (joining) { joining = false; return; }
       saveOrder();
     });
-    memo.querySelector('.move').addEventListener('click', function () {
-      name.value = transcriptOf(memo);
-      preview.textContent = '';
-      flush(memo);
-    });
+    memo.querySelector('.move').addEventListener('click', function () { moveText(memo); });
     memo.querySelectorAll('.clip').forEach(function (btn) {
       btn.addEventListener('click', function () { copyCell(btn, memo); });
     });

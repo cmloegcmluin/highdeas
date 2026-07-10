@@ -130,8 +130,11 @@ h1 { font-size: 1.35rem; margin: 0; }
 .memo .move, .memo .del { width: 100%; opacity: .45;
                           transition: opacity .15s, color .15s, border-color .15s; }
 .memo .move:not(:disabled):hover, .memo .del:not(:disabled):hover { opacity: 1; }
+/* The arrow turns around once the transcript is empty, sending the name back the other
+   way; with both cells empty it has no move to offer and fades out of the row. */
 .memo .move { font-size: 1.4rem; line-height: 1; padding: 0; height: 40px;
               display: flex; align-items: center; justify-content: center; }
+.memo .move:disabled { opacity: .15; }
 .memo .del { padding: 9px 0; }
 .memo .del svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
 /* The one filled button in the app — the primary action of a row and of the editor. */
