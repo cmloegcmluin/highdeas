@@ -98,6 +98,8 @@ Everything but the Notesnook key is optional. Set these in `.env`.
 
 ## Not yet wired
 
+- A native iOS capture app that records and pushes straight to this server instead of
+  waiting on the iCloud mirror. Scoped and handed off in `docs/ios-app-handoff.md`.
 - Grouping a multi-clip memo into one shared numbered doc.
 - A single-file standalone `.exe`. The taskbar shortcut still launches through the
   project's `.venv` (`pythonw run_highdeas.py`), so this folder and its virtualenv need
