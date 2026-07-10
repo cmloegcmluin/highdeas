@@ -404,8 +404,9 @@ def test_a_group_row_wears_its_badge_as_the_button_that_breaks_it_up(tmp_path):
 
     # The badge carries both faces: whole, and coming apart. Hovering swaps them, so the
     # click reads as what it does before it is made. It is a button that acts on its row,
-    # so it takes the same square as the button heading its column.
-    assert 'class="btn icon group-badge ungroup"' in body
+    # so it takes the same square as the button heading its column — and .danger, because
+    # what it does is take something apart: reaching for it reddens, as the bins do.
+    assert 'class="btn icon danger group-badge ungroup"' in body
     assert 'class="ic-whole"' in body and 'class="ic-broken"' in body
     assert ".ungroup .ic-broken { display: none" in css
     assert ".ungroup:hover .ic-whole" in css

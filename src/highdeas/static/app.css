@@ -120,8 +120,8 @@ h1 { font-size: 1.35rem; margin: 0; }
 /* A group's badge while a dragged note hovers it: let go here and the note joins it. */
 .kind.dropping { outline: 2px dashed #3b82f6; outline-offset: 3px; border-radius: 6px; }
 /* On the inbox the badge is a button — the same square as the head above it — and
-   reaching for it shows the stack coming apart, so the click reads as what it does
-   before it is made. */
+   reaching for it shows the stack coming apart and reddens (.btn.danger), so the click
+   reads as what it does, and as the taking-apart that it is, before it is made. */
 .ungroup .ic-broken { display: none; }
 .ungroup:hover .ic-whole, .ungroup:focus-visible .ic-whole { display: none; }
 .ungroup:hover .ic-broken, .ungroup:focus-visible .ic-broken { display: block; }

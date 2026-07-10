@@ -77,12 +77,13 @@
 
 {#- The group column's cell. Every row carries the badge; CSS shows it only on a group,
     so promoting a note to a group is a data-kind flip and needs no markup from the
-    client. On the inbox the badge is the button that breaks the group back up, and the
-    cell around it is where a note is dropped to join one. Nothing in the bin is in the
-    inbox to break apart, so the bin's badge only reports. -#}
+    client. On the inbox the badge is the button that breaks the group back up — .danger,
+    since taking a group apart discards it — and the cell around it is where a note is
+    dropped to join one. Nothing in the bin is in the inbox to break apart, so the bin's
+    badge only reports. -#}
 {% macro kind_cell(breakable=false) -%}
 <div class="kind">
-  {%- if breakable %}<button type="button" class="btn icon group-badge ungroup" title="Break this group back into its notes" aria-label="Break this group back into its notes"><span class="ic-whole">{{ group() }}</span><span class="ic-broken">{{ ungroup() }}</span></button>
+  {%- if breakable %}<button type="button" class="btn icon danger group-badge ungroup" title="Break this group back into its notes" aria-label="Break this group back into its notes"><span class="ic-whole">{{ group() }}</span><span class="ic-broken">{{ ungroup() }}</span></button>
   {%- else %}<span class="group-badge" title="A group of notes" aria-label="A group of notes">{{ group() }}</span>
   {%- endif %}</div>
 {%- endmacro %}
