@@ -26,12 +26,13 @@
   {% if not loop.first %}<div class="sep"></div>{% endif %}
   <div class="memo" data-file="{{ m.audio_filename }}" data-words="{{ m.word_times }}"
        data-kind="{{ 'group' if m.kind == 'group' else 'note' }}">
-    {#- The recording's time leads the row: it is the one thing about a row that never
-        changes, so it anchors the row the way a number can't once you reorder by hand. -#}
-    <div class="when">{{ m.recorded_at | when }}</div>
-    <input type="checkbox" class="pick" aria-label="Select this note">
+    {#- The three controls that act on the row lead it — grip, tick, badge — narrow and
+        within reach of one another. Then the first thing the row has to say: when it was
+        recorded, the one fact about it that never changes. -#}
     <div class="grip" draggable="true" title="Drag to move this note" aria-label="Drag to move this note">{{ grip() }}</div>
+    <input type="checkbox" class="pick" aria-label="Select this note">
     {{ kind_cell(breakable=true) }}
+    <div class="when">{{ m.recorded_at | when }}</div>
     <audio controls src="/audio/{{ m.audio_filename }}"></audio>
     <div class="cell">
       <div class="transcript" role="button" tabindex="0" title="Open the editor" aria-label="Edit transcript">{{ m.transcript }}</div>

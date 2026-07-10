@@ -28,14 +28,15 @@
     one of them: it folds the ticked notes together, so it heads the badge column right
     beside their checkboxes.
 
-    Recorded leads: it is the row's anchor, standing where the row number used to. -#}
+    The grip and the chevron head nothing — there is no naming a handle — so those two
+    heads stay empty, and the rule under the header row breaks across them. -#}
 {% block headrow %}
   {% from "icons.html" import group, send, trash %}
   <div class="grid inbox headrow">
-    <div class="head">Recorded</div>
-    <div class="head"><input type="checkbox" id="select-all" title="Select every note" aria-label="Select every note"></div>
     <div class="head"></div>
+    <div class="head"><input type="checkbox" id="select-all" title="Select every note" aria-label="Select every note"></div>
     <div class="head"><button type="button" id="group-picked" class="kind-btn" disabled title="Group the selected notes" aria-label="Group the selected notes">{{ group() }}</button></div>
+    <div class="head">Recorded</div>
     <div class="head">Audio</div>
     <div class="head">Transcript</div>
     <div class="head"></div>

@@ -730,19 +730,45 @@ def test_the_drag_picture_leaves_the_dragged_rows_destination_where_it_was(tmp_p
     assert ghost.index("removeAttribute('name')") < ghost.index("document.body.appendChild(ghost)")
 
 
-def test_inbox_row_shows_when_the_recording_was_made_in_its_leading_column(tmp_path):
+def test_inbox_row_shows_when_the_recording_was_made(tmp_path):
     # Reconciling a row against the recordings on the phone means knowing when it was
-    # recorded, so each row leads with its recording time under a "Recorded" header —
-    # the row's anchor now that it carries no number.
+    # recorded, so each row carries its recording time under a "Recorded" header.
     service = FakeService(pending=[Memo(audio_filename="a.m4a", recorded_at="2026-07-07T14:23:05")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     body = client.get("/").data.decode()
 
+    assert "Recorded" in body
     assert "Jul 7, 2:23 PM" in body
-    # Ahead of the select checkbox, in the header row and in the memo row alike.
-    assert body.index("Recorded") < body.index('id="select-all"')
-    assert body.index('class="when"') < body.index('class="pick"')
+
+
+def test_an_inbox_row_leads_with_grip_select_group_then_recorded(tmp_path):
+    # The three controls that act on a row come first, narrow and in reach of each
+    # other; the recording time follows as the first thing the row has to *say*.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", recorded_at="2026-07-07T14:23:05")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    row = body.index('class="memo"')
+    order = ['class="grip"', 'class="pick"', 'class="kind"', 'class="when"']
+    assert [body.index(cell, row) for cell in order] == sorted(body.index(cell, row) for cell in order)
+    # The headers run the same way, so each control sits under the head that presses it.
+    heads = ['id="select-all"', 'id="group-picked"', "Recorded"]
+    assert [body.index(head) for head in heads] == sorted(body.index(head) for head in heads)
+
+
+def test_a_column_with_no_header_carries_no_underline(tmp_path):
+    # The header row's rule marks off the columns that are named. Under the grip and the
+    # move chevron there is nothing to name, so the rule breaks rather than underlining
+    # a heading that isn't there.
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    css = asset(client, "app.css")
+
+    assert ".grid .head:empty" in css
+    rule = css.split(".grid .head:empty {")[1].split("}")[0]
+    assert "border-bottom: none" in rule
 
 
 def test_inbox_row_leaves_the_timestamp_blank_when_the_recording_time_is_unknown(tmp_path):
@@ -1098,14 +1124,10 @@ def test_bin_shows_its_timestamp_in_the_same_readable_form_as_the_inbox(tmp_path
 
     body = client.get("/bin").data.decode()
 
-    # The two pages' timestamp columns line up and read alike, so flipping between
-    # them doesn't mean re-parsing a raw ISO string on one of them.
+    # The two pages read their timestamps alike, so flipping between them doesn't mean
+    # re-parsing a raw ISO string on one of them.
     assert "Jul 7, 3:00 AM" in body
     assert "2026-07-07T03:00" not in body
-    # Both timestamps lead their row: the inbox's "Recorded" moved to the front when the
-    # row number went, and the bin's "When" follows it there or the pages stop aligning.
-    assert body.index("When") < body.index("Audio")
-    assert body.index('class="when"') < body.index('class="num"')
 
 
 def test_bin_shows_destination_icon_instead_of_status_word(tmp_path):
@@ -1177,16 +1199,25 @@ def test_bin_back_control_is_a_button_not_a_text_link(tmp_path):
     assert '<a class="btn topbtn" href="/">' in client.get("/bin").data.decode()
 
 
-def test_bin_rows_are_numbered(tmp_path):
+def test_bin_rows_carry_no_number_and_no_placeholder_columns(tmp_path):
+    # The bin used to hold the inbox's shape open with a row number and two empty cells,
+    # so the two grids' columns lined up one for one. Nothing in the bin is reordered, so
+    # the number named nothing; the empties were scaffolding for it. Its rows now start
+    # at the group badge, and its transcript takes back the width they cost.
     service = FakeService(binned=[
         Memo(audio_filename="a.m4a", status="deleted", processed_at="2026-07-07T03:00"),
         Memo(audio_filename="b.m4a", status="processed", processed_at="2026-07-07T02:00"),
     ])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
-    body = client.get("/bin").data
-    assert b'class="num">1</div>' in body
-    assert b'class="num">2</div>' in body
+    body = client.get("/bin").data.decode()
+
+    assert 'class="num"' not in body
+    assert "<div></div>" not in body
+    # Eight columns now, and the badge leads them.
+    assert body.count('<div class="head"') == 8
+    row = body.index('class="row"')
+    assert body.index('class="kind"', row) < body.index('class="when"', row)
 
 
 def test_purge_route_permanently_deletes_and_redirects(tmp_path):

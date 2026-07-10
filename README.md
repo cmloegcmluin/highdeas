@@ -17,22 +17,22 @@ recording, or a subtask on an Asana task.
    instantly and memos stream in as they finish.
 4. **Inbox** — a local Flask page opens in its own native window (Edge WebView2), at the
    size, monitor, and maximized state it was last closed at — maximized until you say
-   otherwise. Each memo row leads with when it was recorded, then a select checkbox, a
-   drag grip, its audio, a transcript preview, a chevron that moves the transcript into
-   the Name field, a Name box, a three-icon destination picker (Notesnook / Drive /
-   Asana — the lit icon is where Submit sends it; lighting Asana reveals a dropdown
-   choosing which task the note lands under), and Submit / Delete. Drag a row by its
-   grip to reorder the list; the row rides under the cursor while you move it. A live
-   item count and a frozen title bar + column headers (carrying **Submit all** /
-   **Trash all**) stay in reach as the list scrolls. Recordings
-   that arrive while the page is open are polled in automatically.
+   otherwise. Each memo row leads with the three controls that act on it — a drag grip, a
+   select checkbox, a group badge — then when it was recorded, its audio, a transcript
+   preview, a chevron that moves the transcript into the Name field, a Name box, a
+   three-icon destination picker (Notesnook / Drive / Asana — the lit icon is where
+   Submit sends it; lighting Asana reveals a dropdown choosing which task the note lands
+   under), and Submit / Delete. Drag a row by its grip to reorder the list; the row rides
+   under the cursor while you move it. A live item count and a frozen title bar + column
+   headers (carrying **Submit all** / **Trash all**) stay in reach as the list scrolls.
+   Recordings that arrive while the page is open are polled in automatically.
 5. **Group** — ideas arrive in clusters. Tick a few notes and press the group button above
    the checkboxes: they fold into one memo whose transcript is a bullet per note, in inbox
    order, a named note reading `- Name: transcript`. Tick an existing group and the rest
    merge into it, keeping its name; or drag a note by its grip onto a group's badge to
    drop it in. Two groups have no obvious survivor, so ticking two disables the button. A
-   badge in the thin column beside the grip marks which rows are groups. The folded-in
-   recordings go to the bin, restorable if the merge was a mistake.
+   badge in the third of the row's leading columns marks which rows are groups. The
+   folded-in recordings go to the bin, restorable if the merge was a mistake.
 
    Grouping comes undone. Reach for a group's badge and it shows the stack coming apart;
    click it and the group breaks back into the separate notes it was folded from, each with

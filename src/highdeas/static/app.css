@@ -1,11 +1,14 @@
 /* One stylesheet for the inbox, the bin, and the note editor, so their chrome is
    identical — same title bar, top-right buttons, and header row — and nothing jumps
-   when you flip between them. The two grids share widths too: a 106px timestamp column
-   leading (the inbox's "Recorded", the bin's "When"), then three thin columns (a select
-   checkbox — empty in the bin, which has nothing to select; the drag grip — the bin's
-   row number, which has nothing to drag; the group badge), then 236 | flex | a middle
-   band | two 94px action columns, so only the middle band's contents differ per page.
-   The bin's band spans one column fewer, so it is a gap wider. */
+   when you flip between them.
+
+   The two grids diverge where the pages do. An inbox row leads with the three controls
+   that act on it — grip, select, group badge — and then a 106px timestamp. The bin
+   reorders nothing and selects nothing, so it leads with the badge and the timestamp
+   alone, rather than holding two columns open for controls it hasn't got. Both then run
+   236 | flex | a band | two 94px action columns, so the pages are the same width and
+   their bulk buttons sit over the same two columns. The flex transcript column absorbs
+   the difference, and the bin's is wider for it. */
 
 /* Reserve the scrollbar gutter on every page so a page with a scrollbar and one
    without stay the same width — otherwise margin:auto re-centers and the layout
@@ -61,17 +64,18 @@ h1 { font-size: 1.35rem; margin: 0; }
    grows, so the Asana dropdown appearing shoved the destination icons (and every
    neighbour) upward. Anchored to the top, a growing cell only extends downward. */
 .grid { display: grid; gap: 14px 18px; align-items: start; }
-.grid.inbox  { grid-template-columns: 106px 22px 26px 30px 236px minmax(220px, 1fr) 30px 132px 110px 94px 94px; }
-.grid.bin    { grid-template-columns: 106px 22px 26px 30px 236px minmax(220px, 1fr) 234px 56px 94px 94px; }
+.grid.inbox  { grid-template-columns: 26px 22px 30px 106px 236px minmax(220px, 1fr) 30px 132px 110px 94px 94px; }
+.grid.bin    { grid-template-columns: 30px 106px 236px minmax(220px, 1fr) 234px 56px 94px 94px; }
 .grid.body { margin-top: 12px; }
 .grid .head { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; opacity: .55;
               display: flex; align-items: flex-end; min-height: 32px;
               padding-bottom: 4px; border-bottom: 1px solid rgba(128,128,128,.25); }
+/* A grip, a chevron, a badge in the bin: columns with nothing to name. The rule under
+   the header row marks off the columns that have a heading, so it breaks across these
+   rather than underlining a word that isn't there. */
+.grid .head:empty { border-bottom: none; }
 .grid .sep { grid-column: 1 / -1; border-top: 1px solid rgba(128,128,128,.18); }
-/* The bin's rows are numbered; the inbox's are not, because you reorder them by hand
-   and a number would only ever name where a row is sitting this second. */
-.num { font-size: .8rem; opacity: .4; text-align: right; font-variant-numeric: tabular-nums; }
-/* Timestamps lead both pages: the inbox's recording time and the bin's processed time. */
+/* The recording's time on the inbox, the retiring time in the bin. */
 .when { font-size: .8rem; opacity: .6; white-space: nowrap; }
 /* The one cell of an inbox row you can pick up. Dotted, so the row says where to take
    hold of it, and faint until you go for it. */

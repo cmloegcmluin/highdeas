@@ -3,16 +3,15 @@
 
 {% block links %}<a class="btn topbtn" href="/">&larr; Back to inbox</a>{% endblock %}
 
-{#- The bin has nothing to select and nothing to drag, but it keeps the inbox's leading
-    columns — the timestamp, then two thin empties — so the audio column and everything
-    after it land at the same x on both pages. Its timestamp leads for the same reason
-    the inbox's "Recorded" does, and would strand the two pages apart if it didn't. -#}
+{#- The bin has nothing to reorder and nothing to select, so it carries neither a grip
+    nor a checkbox, and held their columns open with empties for no one. It starts at the
+    group badge instead. Its rows keep the inbox's overall width — the two pages' bulk
+    buttons still sit above the same two columns — and the transcript takes back the
+    room the empties cost. -#}
 {% block headrow %}
   <div class="grid bin headrow">
+    <div class="head"></div>
     <div class="head">When</div>
-    <div class="head"></div>
-    <div class="head"></div>
-    <div class="head"></div>
     <div class="head">Audio</div>
     <div class="head">Transcript</div>
     <div class="head">Name</div>
@@ -31,10 +30,8 @@
     {% for m in memos %}
     {% if not loop.first %}<div class="sep"></div>{% endif %}
     <div class="row" data-kind="{{ 'group' if m.kind == 'group' else 'note' }}">
-      <div class="when">{{ m.processed_at | when }}</div>
-      <div></div>
-      <div class="num">{{ loop.index }}</div>
       {{ kind_cell() }}
+      <div class="when">{{ m.processed_at | when }}</div>
       <audio controls src="/bin-audio/{{ m.audio_filename }}"></audio>
       <div class="text">{{ m.transcript }}</div>
       <div class="name">{{ m.name or m.audio_filename }}</div>
