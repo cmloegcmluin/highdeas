@@ -35,6 +35,28 @@ TRASH_SVG = (
     'stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
 )
+CLIPBOARD_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+    '<rect x="9" y="9" width="12" height="12" rx="2"/>'
+    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+)
+CHECK_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" '
+    'stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+)
+
+
+def _clip_button(field):
+    """A copy-to-clipboard button pinned inside `field`'s box. It carries both the
+    clipboard and the check icon; the client swaps them with a `.copied` class, so
+    the confirmation costs no DOM surgery."""
+    return (
+        f'<button type="button" class="clip" data-copy="{field}" '
+        f'title="Copy {field}" aria-label="Copy {field}">'
+        f'<span class="ic-copy">{CLIPBOARD_SVG}</span>'
+        f'<span class="ic-ok">{CHECK_SVG}</span></button>'
+    )
 
 # One stylesheet shared by the inbox and bin pages so their chrome is identical —
 # same title bar, top-right link, and header row — and nothing jumps when you flip
@@ -92,7 +114,24 @@ _STYLE = """<style>
   .memo textarea, .memo input[type=text] {
     width: 100%; box-sizing: border-box; padding: 8px; font: inherit;
     border: 1px solid rgba(128,128,128,.4); border-radius: 8px; background: transparent; color: inherit; }
-  .memo textarea { min-height: 60px; resize: vertical; }
+  .memo textarea { min-height: 60px; resize: vertical; display: block; }
+  /* The copy button rides inside its field's box rather than taking a grid column,
+     so the inbox keeps the same widths the bin grid mirrors. The field pads right
+     to keep its text out from under the button. */
+  .field { position: relative; }
+  .field textarea, .field input[type=text] { padding-right: 34px; }
+  .memo .clip { position: absolute; top: 7px; right: 6px; width: 24px; height: 24px;
+                display: flex; align-items: center; justify-content: center; padding: 0;
+                border: none; border-radius: 6px; background: transparent; color: inherit;
+                opacity: .35; cursor: pointer; transition: opacity .15s, color .15s; }
+  /* A one-line field centers its button; the textarea anchors it to the first line. */
+  .field.single .clip { top: 50%; transform: translateY(-50%); }
+  .memo .clip:hover { opacity: 1; color: #3b82f6; }
+  .memo .clip svg { width: 15px; height: 15px; display: block; }
+  /* Copied: hold a green check for a beat, since the clipboard gives no other sign. */
+  .memo .clip.copied { opacity: 1; color: #30a46c; }
+  .memo .clip .ic-ok, .memo .clip.copied .ic-copy { display: none; }
+  .memo .clip.copied .ic-ok { display: block; }
   /* A row whose submit/trash just failed: outline its fields so it's obvious which
      one stayed behind. */
   .memo.failed textarea, .memo.failed input[type=text] { border-color: #e5484d; }
@@ -200,9 +239,15 @@ CONTENT_HTML = """{% if not memos %}
     <div class="memo" data-file="{{ m.audio_filename }}">
       <div class="num">{{ loop.index }}</div>
       <audio controls src="/audio/{{ m.audio_filename }}"></audio>
-      <textarea name="transcript" aria-label="Transcript">{{ m.transcript }}</textarea>
+      <div class="field">
+        <textarea name="transcript" aria-label="Transcript">{{ m.transcript }}</textarea>
+        """ + _clip_button("transcript") + """
+      </div>
       <button type="button" class="move" title="Move transcript into Name" aria-label="Move transcript into Name">&rsaquo;</button>
-      <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
+      <div class="field single">
+        <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
+        """ + _clip_button("name") + """
+      </div>
       <label class="toggle" title="Left = Notesnook, right = Google Drive">
         <input type="checkbox" name="route" value="drive" {{ 'checked' if m.route == 'drive' }}>
         <span class="ic ns" aria-label="Notesnook">""" + NOTESNOOK_SVG + """</span>
@@ -336,6 +381,30 @@ _PAGE_TAIL = """  </main>
     return retireOnOk(memo, post(urlFor('/delete/', memo)));
   }
 
+  // Copy a field's text to the clipboard and hold a check on the button for a beat —
+  // the clipboard gives no sign of its own that the copy landed.
+  var COPIED_MS = 1200;
+
+  function writeClipboard(text) {
+    try {
+      return navigator.clipboard.writeText(text);
+    } catch (err) {
+      return Promise.reject(err);  // no Clipboard API at all (insecure origin, old webview)
+    }
+  }
+
+  function copyField(btn, memo) {
+    clearNotice();
+    var field = memo.querySelector('[name=' + btn.dataset.copy + ']');
+    writeClipboard(field.value).then(function () {
+      btn.classList.add('copied');
+      clearTimeout(btn._copied);
+      btn._copied = setTimeout(function () { btn.classList.remove('copied'); }, COPIED_MS);
+    }).catch(function (err) {
+      notify("Couldn't copy that to the clipboard." + describe(err));
+    });
+  }
+
   function wire(memo) {
     var transcript = memo.querySelector('textarea[name=transcript]');
     var name = memo.querySelector('input[name=name]');
@@ -349,6 +418,9 @@ _PAGE_TAIL = """  </main>
       name.value = transcript.value;
       transcript.value = '';
       flush(memo);
+    });
+    memo.querySelectorAll('.clip').forEach(function (btn) {
+      btn.addEventListener('click', function () { copyField(btn, memo); });
     });
     memo.querySelector('.go').addEventListener('click', function () {
       clearNotice();
