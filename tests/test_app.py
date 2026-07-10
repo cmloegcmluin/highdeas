@@ -4,10 +4,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from highdeas.app import (
+    _ingest_continuously,
     _open_when_ready,
     _open_window,
     _run_browser,
-    _transcribe_in_background,
     build_app,
     default_bin_dir,
 )
@@ -89,33 +89,40 @@ def test_open_window_tracks_the_window_so_the_next_launch_reopens_maximized(tmp_
     assert load_geometry(path).maximized is True
 
 
-def test_transcribe_in_background_runs_refresh_off_the_calling_thread():
-    ran = threading.Event()
-    seen = {}
+def test_ingest_continuously_keeps_rescanning_the_inbox_off_the_calling_thread():
+    stop, done, threads = threading.Event(), threading.Event(), []
 
     class FakeService:
         def refresh(self):
-            seen["thread"] = threading.get_ident()
-            ran.set()
+            threads.append(threading.get_ident())
+            if len(threads) == 2:
+                stop.set()
+                done.set()
 
-    _transcribe_in_background(FakeService())
+    _ingest_continuously(FakeService(), interval=0, stop=stop)
 
-    assert ran.wait(timeout=2)
-    assert seen["thread"] != threading.get_ident()  # off the UI thread, so the window opens now
+    assert done.wait(timeout=2)
+    assert threads[0] != threading.get_ident()  # off the UI thread, so the window opens now
+    # It scans on and on, so a memo recorded while the bin is the page on screen still
+    # reaches the inbox: ingestion belongs to the app, not to whichever view is open.
+    assert len(threads) == 2
 
 
-def test_transcribe_in_background_survives_a_failing_refresh():
-    ran = threading.Event()
+def test_ingest_continuously_keeps_scanning_after_a_failing_refresh():
+    stop, done, calls = threading.Event(), threading.Event(), []
 
     class BadService:
         def refresh(self):
-            ran.set()
+            calls.append(1)
+            if len(calls) == 2:
+                stop.set()
+                done.set()
             raise RuntimeError("boom")
 
-    # A bad recording must never crash startup: the background thread swallows it.
-    _transcribe_in_background(BadService())
+    # A bad recording must never crash startup, nor end the scan that follows it.
+    _ingest_continuously(BadService(), interval=0, stop=stop)
 
-    assert ran.wait(timeout=2)
+    assert done.wait(timeout=2)
 
 
 def test_chrome_launcher_opens_the_url_in_the_configured_profile(monkeypatch):
@@ -192,7 +199,7 @@ def test_main_falls_back_to_the_browser_when_the_desktop_window_is_switched_off(
     monkeypatch.setenv("HIGHDEAS_DESKTOP", "0")
     monkeypatch.setattr(app_mod, "_set_windows_app_id", lambda: None)
     monkeypatch.setattr(app_mod, "build_app", lambda: ("APP", "SERVICE"))
-    monkeypatch.setattr(app_mod, "_transcribe_in_background", lambda service: None)
+    monkeypatch.setattr(app_mod, "_ingest_continuously", lambda service: None)
     monkeypatch.setattr(app_mod, "_run_desktop", lambda app: opened.append(("desktop", app)) or True)
     monkeypatch.setattr(app_mod, "_run_browser", lambda app: opened.append(("browser", app)))
 

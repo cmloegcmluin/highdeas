@@ -40,7 +40,7 @@ def create_app(service, inbox_dir, bin_dir, open_link=None, asana_parents=()):
     @app.get("/")
     def index():
         # No rescan here: the page must paint instantly from what's already stored.
-        # The background catch-up transcribes waiting recordings and the /pending
+        # The app's background scan transcribes waiting recordings and the /pending
         # poll streams them in, so the first frame never waits on the model.
         return render_template(
             "inbox.html", memos=service.pending(), incoming=service.has_incoming(),
@@ -50,7 +50,11 @@ def create_app(service, inbox_dir, bin_dir, open_link=None, asana_parents=()):
     @app.get("/pending")
     def pending():
         """The inbox rows alone — polled by the open page to pick up recordings
-        that arrive after load, so the app stays current without a manual reload."""
+        that arrive after load, so the app stays current without a manual reload.
+
+        It rescans rather than reading the store the background scan keeps current,
+        because this is also what the page's "check for new notes now" button calls:
+        a scan the user asked for shouldn't wait on the next tick of one they didn't."""
         service.refresh()
         return render_template("rows.html", memos=service.pending(),
                                asana_parents=asana_parents)

@@ -110,23 +110,40 @@ def _chrome_launcher():
 def main():
     _set_windows_app_id()
     app, service = build_app()
-    _transcribe_in_background(service)
+    _ingest_continuously(service)
     if os.environ.get("HIGHDEAS_DESKTOP", "1") == "1" and _run_desktop(app):
         return
     _run_browser(app)
 
 
-def _transcribe_in_background(service):
-    """Catch up on any waiting recordings off the UI thread, so the window opens
-    instantly and memos stream in as they finish transcribing (the /pending poll
-    surfaces them). A bad recording must never crash startup, so swallow errors."""
-    def run():
-        try:
-            service.refresh()
-        except Exception as exc:  # noqa: BLE001 — startup survives a bad recording
-            print(f"Background transcription failed ({exc}).")
+# How long the scan waits before looking in the inbox again. It is a directory listing
+# — no model, no decoding, and never a recording that iCloud is still bringing down —
+# so a new memo can be picked up within a few seconds of the phone dropping it in.
+INGEST_INTERVAL = 5.0
 
-    threading.Thread(target=run, daemon=True, name="highdeas-transcribe").start()
+
+def _ingest_continuously(service, *, interval=INGEST_INTERVAL, stop=None):
+    """Ingest and transcribe waiting recordings, over and over, off the UI thread.
+
+    Ingestion belongs to the app, not to whichever page is on screen: a memo recorded
+    while the bin is showing must still land in the inbox, ready and transcribed by
+    the time the user goes back to it. Running off the UI thread is what lets the
+    window open instantly — the startup catch-up and the model load never block the
+    first frame; memos stream in as they finish (the /pending poll surfaces them).
+
+    A bad recording must never crash startup or end the scan, so swallow errors."""
+    stop = stop or threading.Event()
+
+    def run():
+        while True:
+            try:
+                service.refresh()
+            except Exception as exc:  # noqa: BLE001 — one bad recording must not end the scan
+                print(f"Background transcription failed ({exc}).")
+            if stop.wait(interval):
+                return
+
+    threading.Thread(target=run, daemon=True, name="highdeas-ingest").start()
 
 
 def _run_desktop(app):
