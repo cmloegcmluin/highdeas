@@ -1,0 +1,35 @@
+{#- The note editor: a near-fullscreen dialog opened by clicking a row's
+    transcript. One dialog serves every row — the client fills it in on open.
+
+    Its point is that massaging a note in Highdeas should be nicer than shipping
+    it half-finished to Notesnook: the recording plays back as a scrubbable
+    waveform with each spoken word lighting up in the text, the title has room to
+    be read whole, and the body is a real rich-text area with bulleted and
+    numbered lists. -#}
+<dialog id="editor" class="editor" aria-label="Edit note">
+  <div class="editor-head">
+    <input type="text" id="editor-name" class="editor-name" placeholder="Name…" autocomplete="off" aria-label="Name">
+    <button type="button" id="editor-close" class="editor-close" title="Close (Esc)" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="player">
+    <canvas id="editor-wave" class="wave" aria-label="Waveform — click or drag to scrub"></canvas>
+    <div class="player-bar">
+      <button type="button" id="editor-play" class="play" aria-label="Play or pause">Pause</button>
+      <span id="editor-time" class="time">0:00 / 0:00</span>
+      <span id="editor-wave-note" class="wave-note" hidden>Waveform unavailable</span>
+    </div>
+    <audio id="editor-audio" preload="auto"></audio>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="tool" data-cmd="insertUnorderedList" title="Bulleted list">&bull;&nbsp;List</button>
+    <button type="button" class="tool" data-cmd="insertOrderedList" title="Numbered list">1.&nbsp;List</button>
+  </div>
+
+  <div id="editor-body" class="editor-body" contenteditable="true" spellcheck="true" aria-label="Transcript"></div>
+
+  <div class="editor-foot">
+    <button type="button" id="editor-done" class="go">Done</button>
+  </div>
+</dialog>

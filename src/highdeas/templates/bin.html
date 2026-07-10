@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Bin{% endblock %}
+
+{% block links %}<a href="/">&larr; Back to inbox</a>{% endblock %}
+
+{% block headrow %}
+  <div class="grid bin headrow">
+    <div class="head"></div>
+    <div class="head">Audio</div>
+    <div class="head">Transcript</div>
+    <div class="head">Name</div>
+    <div class="head">Where</div>
+    <div class="head">When</div>
+    <div class="head"><form method="post" action="/restore-all" onsubmit="return confirm('Restore all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }} to the inbox?');"><button class="head-btn restore-all" type="submit">Restore all</button></form></div>
+    <div class="head"><form method="post" action="/empty-bin" onsubmit="return confirm('Permanently delete all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }}? This cannot be undone.');"><button class="head-btn empty-bin" type="submit">Empty bin</button></form></div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% from "icons.html" import notesnook, drive, trash %}
+  {% if not memos %}
+  <p class="empty">Nothing in the bin. Submitted and deleted memos land here (kept for 90 days).</p>
+  {% else %}
+  <div class="grid bin body">
+    {% for m in memos %}
+    {% if not loop.first %}<div class="sep"></div>{% endif %}
+    <div class="row">
+      <div class="num">{{ loop.index }}</div>
+      <audio controls src="/bin-audio/{{ m.audio_filename }}"></audio>
+      <div class="text">{{ m.transcript }}</div>
+      <div class="name">{{ m.name or m.audio_filename }}</div>
+      <div class="dest">{% if m.status == 'deleted' %}<span title="Trashed" aria-label="Trashed">{{ trash() }}</span>{% elif m.route == 'drive' %}<form method="post" action="/open-drive"><input type="hidden" name="q" value="{{ m.name or m.audio_filename.rsplit('.', 1)[0] }}"><button class="destlink" type="submit" title="Sent to Google Drive — open in Drive" aria-label="Sent to Google Drive — open in Drive">{{ drive() }}</button></form>{% else %}<span title="Sent to Notesnook" aria-label="Sent to Notesnook">{{ notesnook() }}</span>{% endif %}</div>
+      <div class="when">{{ m.processed_at | when }}</div>
+      <div><form method="post" action="/restore/{{ m.audio_filename }}"><button class="binbtn restore" type="submit">Restore</button></form></div>
+      <div><form method="post" action="/purge/{{ m.audio_filename }}" onsubmit="return confirm('Permanently delete this recording? This cannot be undone.');"><button class="binbtn purge" type="submit">Delete</button></form></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endblock %}

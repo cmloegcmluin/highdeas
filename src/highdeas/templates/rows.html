@@ -1,0 +1,37 @@
+{#- The inbox memo rows alone, rendered both inside the full page and returned
+    bare for the client's /pending poll (which splices in the new rows).
+
+    A row's transcript is a preview, not a field: clicking it opens the editor
+    dialog, where the whole note — waveform, spoken-word highlighting, title,
+    lists — has room to be worked on. The row carries the memo's word timings so
+    the editor can highlight along with the audio without a second request. -#}
+{% from "icons.html" import notesnook, drive, trash %}
+{% if not memos %}
+  {% if incoming %}
+  <p class="empty">Transcribing your memos…</p>
+  {% else %}
+  <p class="empty">Your inbox is empty. Record a memo and it'll show up here.</p>
+  {% endif %}
+{% else %}
+<div class="grid inbox body">
+  {% for m in memos %}
+  {% if not loop.first %}<div class="sep"></div>{% endif %}
+  <div class="memo" data-file="{{ m.audio_filename }}" data-words="{{ m.word_times }}">
+    <div class="num" draggable="true" title="Drag to move this note">{{ loop.index }}</div>
+    <audio controls src="/audio/{{ m.audio_filename }}"></audio>
+    <div class="transcript" role="button" tabindex="0" title="Open the editor" aria-label="Edit transcript">{{ m.transcript }}</div>
+    <button type="button" class="copy" title="Move transcript into Name" aria-label="Move transcript into Name">&rsaquo;</button>
+    <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
+    <label class="toggle" title="Left = Notesnook, right = Google Drive">
+      <input type="checkbox" name="route" value="drive" {{ 'checked' if m.route == 'drive' }}>
+      <span class="ic ns" aria-label="Notesnook">{{ notesnook() }}</span>
+      <span class="track"></span>
+      <span class="ic dr" aria-label="Google Drive">{{ drive() }}</span>
+    </label>
+    <div class="when">{{ m.recorded_at | when }}</div>
+    <button type="button" class="go">Submit</button>
+    <button type="button" class="del" title="Delete" aria-label="Delete">{{ trash() }}</button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

@@ -55,18 +55,28 @@ def test_decode_to_wav_hides_console_window(tmp_path):
     assert runner.kwargs[0].get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-class FakeModel:
-    def __init__(self, text):
+class Recognition:
+    """What onnx-asr's timestamped adapter hands back: the text, plus the sub-word
+    tokens it decoded and the second each was emitted at."""
+
+    def __init__(self, text, tokens=(), timestamps=()):
         self.text = text
+        self.tokens = tokens
+        self.timestamps = timestamps
+
+
+class FakeModel:
+    def __init__(self, result):
+        self.result = result
         self.recognized = []
 
     def recognize(self, wav):
         self.recognized.append(wav)
-        return self.text
+        return self.result
 
 
 def test_transcriber_decodes_then_recognizes(tmp_path):
-    model = FakeModel("hello world")
+    model = FakeModel(Recognition("hello world"))
     decoded = tmp_path / "voice.wav"
     decoded_calls = []
 
@@ -74,15 +84,15 @@ def test_transcriber_decodes_then_recognizes(tmp_path):
         decoded_calls.append(src)
         return decoded
 
-    text = Transcriber(model=model, decode=fake_decode).transcribe(tmp_path / "voice.m4a")
+    spoken = Transcriber(model=model, decode=fake_decode).transcribe(tmp_path / "voice.m4a")
 
-    assert text == "hello world"
+    assert spoken.text == "hello world"
     assert decoded_calls == [tmp_path / "voice.m4a"]
     assert model.recognized == [decoded]
 
 
 def test_transcriber_lazy_loads_model_once(tmp_path):
-    model = FakeModel("hi")
+    model = FakeModel(Recognition("hi"))
     load_calls = []
 
     def fake_loader(name):
@@ -100,3 +110,31 @@ def test_transcriber_lazy_loads_model_once(tmp_path):
     transcriber.transcribe(tmp_path / "b.m4a")
 
     assert load_calls == ["the-model"]  # loaded exactly once, by name
+
+
+def test_transcriber_groups_sub_word_tokens_into_words_it_can_time(tmp_path):
+    # The model emits sub-word tokens, each stamped with the second it was spoken:
+    # a leading space starts a new word, everything else continues the one before.
+    # The editor highlights whole words, so gather them here rather than there.
+    model = FakeModel(Recognition(
+        "I need a dusting.",
+        tokens=[" I", " need", " a", " d", "ust", "ing", "."],
+        timestamps=[0.96, 1.52, 2.08, 2.32, 2.48, 2.72, 2.88],
+    ))
+
+    spoken = Transcriber(model=model, decode=lambda src: tmp_path / "x.wav").transcribe(tmp_path / "a.m4a")
+
+    assert [(w.start, w.text) for w in spoken.words] == [
+        (0.96, "I"), (1.52, "need"), (2.08, "a"), (2.32, "dusting."),
+    ]
+
+
+def test_transcriber_reports_no_words_when_the_model_gives_no_timings(tmp_path):
+    # A model without timestamp support still transcribes; the note just can't
+    # highlight along with its audio.
+    model = FakeModel(Recognition("hello world", tokens=None, timestamps=None))
+
+    spoken = Transcriber(model=model, decode=lambda src: tmp_path / "x.wav").transcribe(tmp_path / "a.m4a")
+
+    assert spoken.text == "hello world"
+    assert spoken.words == ()

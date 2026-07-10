@@ -31,7 +31,9 @@ def test_get_unknown_returns_none(tmp_path):
     assert store.get("nope.m4a") is None
 
 
-def test_store_migrates_a_db_created_before_recorded_at_existed(tmp_path):
+def test_store_migrates_a_db_created_before_the_newer_columns_existed(tmp_path):
+    # Opening a memos.db from an older version must add every column since added,
+    # each with the type it needs — position sorts numerically only as an INTEGER.
     db = tmp_path / "memos.db"
     legacy = sqlite3.connect(db)
     legacy.execute(
@@ -41,10 +43,15 @@ def test_store_migrates_a_db_created_before_recorded_at_existed(tmp_path):
     legacy.commit()
     legacy.close()
 
-    store = MemoStore(db)  # opening the older DB must add the missing column
-    store.upsert(Memo(audio_filename="a.m4a", recorded_at="2026-07-07T13:37:04"))
+    store = MemoStore(db)
+    names = [f"{i}.m4a" for i in range(12)]
+    for filename in names:
+        store.upsert(Memo(audio_filename=filename, status="pending",
+                          recorded_at="2026-07-07T13:37:04"))
+    store.reorder(names)
 
-    assert store.get("a.m4a").recorded_at == "2026-07-07T13:37:04"
+    assert store.get("0.m4a").recorded_at == "2026-07-07T13:37:04"
+    assert [m.audio_filename for m in store.list_by_status("pending")] == names
 
 
 def test_known_filenames_returns_stored_filenames(tmp_path):
@@ -72,6 +79,44 @@ def test_list_by_status_filters_and_orders_by_recorded_at(tmp_path):
 
     # a was recorded first though ingested last, so it still sorts ahead of b.
     assert [m.audio_filename for m in pending] == ["a.m4a", "b.m4a"]
+
+
+def test_reorder_pins_pending_memos_to_the_given_order(tmp_path):
+    # Dragging a row rewrites the pending order, overriding recorded time.
+    store = MemoStore(tmp_path / "memos.db")
+    store.upsert(Memo(audio_filename="a.m4a", status="pending", recorded_at="2026-07-07T01:00"))
+    store.upsert(Memo(audio_filename="b.m4a", status="pending", recorded_at="2026-07-07T02:00"))
+    store.upsert(Memo(audio_filename="c.m4a", status="pending", recorded_at="2026-07-07T03:00"))
+
+    store.reorder(["c.m4a", "a.m4a", "b.m4a"])
+
+    assert [m.audio_filename for m in store.list_by_status("pending")] == ["c.m4a", "a.m4a", "b.m4a"]
+
+
+def test_a_memo_with_no_position_lists_after_the_reordered_ones(tmp_path):
+    # A recording that arrives after the user has arranged the inbox joins the end,
+    # rather than jumping into the middle on its recorded time.
+    store = MemoStore(tmp_path / "memos.db")
+    store.upsert(Memo(audio_filename="a.m4a", status="pending", recorded_at="2026-07-07T01:00"))
+    store.upsert(Memo(audio_filename="b.m4a", status="pending", recorded_at="2026-07-07T02:00"))
+    store.reorder(["b.m4a", "a.m4a"])
+
+    store.upsert(Memo(audio_filename="fresh.m4a", status="pending", recorded_at="2026-07-07T00:30"))
+
+    assert [m.audio_filename for m in store.list_by_status("pending")] == [
+        "b.m4a", "a.m4a", "fresh.m4a"]
+
+
+def test_reorder_stays_numeric_past_the_tenth_memo(tmp_path):
+    # Positions must compare as numbers: as text, '10' would sort between '1' and '2'.
+    store = MemoStore(tmp_path / "memos.db")
+    names = [f"{i}.m4a" for i in range(12)]
+    for filename in names:
+        store.upsert(Memo(audio_filename=filename, status="pending"))
+
+    store.reorder(names)
+
+    assert [m.audio_filename for m in store.list_by_status("pending")] == names
 
 
 def test_update_changes_named_fields_only(tmp_path):

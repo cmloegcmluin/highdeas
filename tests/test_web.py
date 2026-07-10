@@ -1,5 +1,13 @@
 from highdeas.store import Memo
+from highdeas.transcribe import Transcript
 from highdeas.web import create_app
+
+
+def asset(client, filename):
+    """A static asset's source, for the behaviour that lives in CSS and JS."""
+    resp = client.get("/static/" + filename)
+    assert resp.status_code == 200, filename
+    return resp.data.decode()
 
 
 class FakeService:
@@ -15,9 +23,13 @@ class FakeService:
         self.purged = []
         self.emptied = 0
         self.restored_all = 0
+        self.reordered = []
 
     def refresh(self):
         self.refreshed += 1
+
+    def reorder(self, audio_filenames):
+        self.reordered.append(list(audio_filenames))
 
     def pending(self):
         return self._pending
@@ -80,53 +92,119 @@ def test_index_renders_inbox_controls(tmp_path):
     assert b'href="/bin"' in body
     # Each row carries its filename so JS can target /edit, /submit, /delete.
     assert b'data-file="a.m4a"' in body
-    # The "move transcript into name" control between Transcript and Name.
-    assert b'class="move"' in body
-
-
-def test_inbox_transcript_has_a_copy_to_clipboard_button(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
-
-    # A button pinned inside the transcript field puts its text on the clipboard,
-    # for pasting the note somewhere the app doesn't route to.
-    assert 'data-copy="transcript"' in body
-    assert "clipboard.writeText" in body
-
-
-def test_inbox_name_has_a_copy_to_clipboard_button(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
-
-    # The name field gets the same button, so a title can be lifted out on its own.
-    assert 'data-copy="name"' in body
-
-
-def test_copy_button_confirms_a_copy_and_reports_a_failed_one(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
-
-    # A copy leaves no trace of its own, so the button holds a check for a beat…
-    assert ".clip.copied" in body
-    assert "classList.add('copied')" in body
-    # …and a clipboard the browser won't hand over says so, rather than looking copied.
-    assert "Couldn't copy" in body
+    # The "copy transcript into name" control between Transcript and Name.
+    assert b'class="copy"' in body
 
 
 def test_index_trash_all_asks_for_confirmation(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     # Trashing everything at once is bulk + easy to fat-finger, so it confirms first.
-    assert b"confirm(" in body
+    assert "confirm(" in asset(client, "inbox.js")
+
+
+def test_pages_load_the_shared_stylesheet_and_the_inbox_loads_its_scripts(tmp_path):
+    # The behaviour asserted below lives in these files, so every page has to pull
+    # them in — a page that forgets one looks fine in the markup and does nothing.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")],
+                          binned=[Memo(audio_filename="b.m4a", status="deleted", processed_at="2026-07-07T03:00")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    index = client.get("/").data.decode()
+    assert "/static/app.css" in index
+    assert "/static/inbox.js" in index
+    assert "/static/editor.js" in index
+    assert "/static/app.css" in client.get("/bin").data.decode()
+
+
+def test_a_rows_transcript_is_a_preview_that_opens_the_editor(tmp_path):
+    # Not a draggable textarea any more: the row shows the transcript, and clicking
+    # it hands the note to the editor dialog, where it has room to be worked on.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hello there")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert "<textarea" not in body
+    assert 'class="transcript"' in body
+    assert ">hello there</div>" in body
+
+
+def test_a_row_carries_its_word_timings_so_the_editor_can_highlight_along(tmp_path):
+    # The timings ride along on the row, so opening the editor costs no extra request.
+    service = FakeService(pending=[
+        Memo(audio_filename="a.m4a", transcript="hi there", word_times='[[0.5,"hi"],[0.9,"there"]]'),
+    ])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert "[[0.5,&#34;hi&#34;],[0.9,&#34;there&#34;]]" in body  # escaped into data-words
+
+
+def test_index_renders_the_editor_dialog_once_for_every_row(tmp_path):
+    service = FakeService(pending=[
+        Memo(audio_filename="a.m4a", transcript="one"),
+        Memo(audio_filename="b.m4a", transcript="two"),
+    ])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    # One dialog serves every row — the client fills it in on open.
+    assert body.count('id="editor"') == 1
+    assert 'id="editor-name"' in body       # the whole title, on one line
+    assert 'id="editor-wave"' in body       # the scrubbable waveform
+    assert 'id="editor-body"' in body       # the big rich-text body
+    assert 'contenteditable="true"' in body
+    assert 'data-cmd="insertUnorderedList"' in body
+    assert 'data-cmd="insertOrderedList"' in body
+
+
+def test_the_editor_dialog_stays_hidden_until_something_opens_it(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    css = asset(client, "app.css")
+    # The browser hides a closed <dialog> with UA `display: none`, but ANY author
+    # `display` on the element overrides that — an unconditional `display: flex`
+    # painted the empty editor at the bottom of the page on every load. The flex
+    # layout may apply only while the dialog is actually open.
+    editor_rule = css.split(".editor {", 1)[1].split("}", 1)[0]
+    assert "display" not in editor_rule
+    assert ".editor[open]" in css
+
+
+def test_the_editor_autoplays_and_highlights_without_selecting(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    script = asset(client, "editor.js")
+    # It starts playing on open — the click that opened the dialog is the gesture
+    # autoplay needs.
+    assert "audio.play()" in script
+    # And it lights the spoken word with the Custom Highlight API, which paints a
+    # range without touching the selection or the caret.
+    assert "CSS.highlights.set('spoken'" in script
+    assert "::highlight(spoken)" in asset(client, "app.css")
+
+
+def test_the_editor_saves_on_the_way_out_rather_than_after_it_has_closed(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    script = asset(client, "editor.js")
+    # A dialog's `close` event is dispatched from a queued task, so a final save hung
+    # on it loses an edit made in the moment before closing. Both exits flush first:
+    # the buttons through closeEditor, and Esc through the `cancel` it fires on the
+    # way to closing.
+    assert "function closeEditor" in script
+    assert "dialog.addEventListener('cancel', teardown)" in script
+
+
+def test_the_editor_is_not_rendered_on_the_bin_page(tmp_path):
+    # Binned notes are read-only; nothing there to edit.
+    service = FakeService(binned=[Memo(audio_filename="b.m4a", status="deleted", processed_at="2026-07-07T03:00")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    assert 'id="editor"' not in client.get("/bin").data.decode()
 
 
 def test_index_bulk_controls_sit_in_the_column_headers(tmp_path):
@@ -163,9 +241,44 @@ def test_inbox_rows_are_numbered(tmp_path):
     ])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
-    body = client.get("/").data
-    assert b'class="num">1</div>' in body
-    assert b'class="num">2</div>' in body
+    body = client.get("/").data.decode()
+    assert ">1</div>" in body
+    assert ">2</div>" in body
+
+
+def test_each_inbox_row_has_a_drag_handle(tmp_path):
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="one")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    # Spreadsheet-style: the row number is the handle you grab to move the row.
+    assert 'class="num" draggable="true"' in body
+    # A drop posts the whole on-screen order back.
+    assert "/reorder" in asset(client, "inbox.js")
+
+
+def test_inbox_row_shows_when_the_recording_was_made(tmp_path):
+    # Reconciling a row against the recordings on the phone means knowing when it was
+    # recorded, so each row carries its recording time under a "Recorded" header.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", recorded_at="2026-07-07T14:23:05")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert "Recorded" in body
+    assert "Jul 7, 2:23 PM" in body
+
+
+def test_inbox_row_leaves_the_timestamp_blank_when_the_recording_time_is_unknown(tmp_path):
+    # Memos stored before recording times were captured carry no recorded_at; the row
+    # still renders, with an empty cell rather than a crash or a bogus date.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", recorded_at="")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert '<div class="when"></div>' in body
 
 
 def test_index_shows_a_transcribing_hint_while_recordings_await(tmp_path):
@@ -192,13 +305,10 @@ def test_index_shows_empty_state_when_the_inbox_is_idle(tmp_path):
 
 
 def test_index_polls_the_pending_endpoint_to_stay_current(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     # The open page keeps itself current by polling the pending fragment.
-    assert b"/pending" in body
+    assert "/pending" in asset(client, "inbox.js")
 
 
 def test_index_offers_a_manual_refresh_left_of_the_bin_link_even_when_empty(tmp_path):
@@ -216,14 +326,11 @@ def test_index_offers_a_manual_refresh_left_of_the_bin_link_even_when_empty(tmp_
 
 
 def test_refresh_button_shows_a_loading_label_while_it_checks(tmp_path):
-    service = FakeService(pending=[])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     # Clicking Refresh swaps the label to a held "Loading…" then restores it, so a check
     # that surfaces nothing new still visibly reacts (the fetch is otherwise instant).
-    assert "Loading" in body
+    assert "Loading" in asset(client, "inbox.js")
 
 
 def test_pending_refreshes_and_renders_just_the_memo_rows(tmp_path):
@@ -253,7 +360,7 @@ def test_pending_surfaces_a_recording_that_arrives_after_the_page_loads(tmp_path
 
     class StubTranscriber:
         def transcribe(self, path):
-            return "fresh idea"
+            return Transcript("fresh idea")
 
     service = InboxService(
         inbox_dir=inbox, store=MemoStore(tmp_path / "memos.db"),
@@ -318,7 +425,7 @@ def test_submit_that_fails_to_route_keeps_the_memo_and_signals_the_client(tmp_pa
 
     class StubTranscriber:
         def transcribe(self, path):
-            return ""
+            return Transcript("")
 
     def failing_route(memo):
         raise RuntimeError("HTTP 401 Unauthorized")
@@ -349,26 +456,31 @@ def test_index_has_a_region_to_report_submit_failures(tmp_path):
 
 
 def test_submit_js_removes_a_row_only_after_the_server_confirms(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     # The row leaves the list only on a successful (r.ok) response; a failed submit
     # keeps it. Guards against regressing to optimistic removal.
-    assert "r.ok" in body
+    assert "r.ok" in asset(client, "inbox.js")
 
 
 def test_index_shows_a_per_row_sending_state_while_a_submit_is_in_flight(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
-
-    body = client.get("/").data.decode()
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     # A row dims/locks and its button reads "Sending…" while its request is in flight,
     # so Submit all visibly works through the list instead of rows silently vanishing.
-    assert "Sending" in body           # the in-flight button label
-    assert ".memo.sending" in body     # the dim-and-lock style the JS toggles
+    assert "Sending" in asset(client, "inbox.js")       # the in-flight button label
+    assert ".memo.sending" in asset(client, "app.css")  # the dim-and-lock style the JS toggles
+
+
+def test_reorder_route_persists_the_dropped_order_and_returns_204(tmp_path):
+    service = FakeService()
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    resp = client.post("/reorder", data={"order": ["c.m4a", "a.m4a", "b.m4a"]})
+
+    # The client posts every row in its on-screen order after a drop.
+    assert service.reordered == [["c.m4a", "a.m4a", "b.m4a"]]
+    assert resp.status_code == 204
 
 
 def test_edit_route_saves_fields_and_returns_204(tmp_path):
@@ -421,6 +533,20 @@ def test_bin_lists_binned_items(tmp_path):
     assert b"Old note" in resp.data
     assert b"bin body" in resp.data
     assert b"b.m4a" in resp.data
+
+
+def test_bin_shows_its_timestamp_in_the_same_readable_form_as_the_inbox(tmp_path):
+    service = FakeService(binned=[
+        Memo(audio_filename="b.m4a", status="deleted", processed_at="2026-07-07T03:00"),
+    ])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/bin").data.decode()
+
+    # The two pages' timestamp columns line up and read alike, so flipping between
+    # them doesn't mean re-parsing a raw ISO string on one of them.
+    assert "Jul 7, 3:00 AM" in body
+    assert "2026-07-07T03:00" not in body
 
 
 def test_bin_shows_destination_icon_instead_of_status_word(tmp_path):
@@ -561,10 +687,7 @@ def test_open_drive_launches_chrome_at_a_drive_search_for_the_memo(tmp_path):
 
 
 def test_pages_reserve_the_scrollbar_gutter_so_they_dont_shift(tmp_path):
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")],
-                          binned=[Memo(audio_filename="b.m4a", status="deleted", processed_at="2026-07-07T03:00")])
-    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
-    # Same gutter reserved on both, so flipping between them doesn't shift sideways.
-    assert b"scrollbar-gutter: stable" in client.get("/").data
-    assert b"scrollbar-gutter: stable" in client.get("/bin").data
+    # One stylesheet for both pages, so flipping between them doesn't shift sideways.
+    assert "scrollbar-gutter: stable" in asset(client, "app.css")

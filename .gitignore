@@ -7,9 +7,10 @@ __pycache__/
 # Secrets — never commit
 .env
 
-# Local database and the processed-audio bin
+# Local database, the processed-audio bin, and the remembered window geometry
 memos.db
 bin/
+window.json
 
 # Generated, machine-specific taskbar shortcut (rebuild with "Create Highdeas Shortcut.bat")
 /Highdeas.lnk

@@ -14,9 +14,22 @@ class Memo:
     created_at: str = ""
     recorded_at: str = ""
     processed_at: str = ""
+    # Where the user dragged this memo in the inbox. None until they reorder, and
+    # again once a memo re-enters the inbox, so unplaced memos fall back to
+    # recorded order (see list_by_status).
+    position: int = None
+    # When each transcribed word was spoken, as the JSON the editor reads back:
+    # [[startSeconds, word], …]. Empty for memos transcribed before timings existed.
+    word_times: str = ""
 
 
 _COLUMNS = [f.name for f in fields(Memo)]
+# Position must compare as a number: in a TEXT column SQLite would sort '10' before '2'.
+_COLUMN_TYPES = {"position": "INTEGER"}
+
+
+def _declaration(column):
+    return f"{column} {_COLUMN_TYPES.get(column, 'TEXT')}"
 
 
 def _row_to_memo(row):
@@ -30,7 +43,7 @@ class MemoStore:
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
-        columns = ", ".join(f"{c} TEXT" for c in _COLUMNS)
+        columns = ", ".join(_declaration(c) for c in _COLUMNS)
         with self._lock:
             self._conn.execute(
                 f"CREATE TABLE IF NOT EXISTS memos ({columns}, PRIMARY KEY (audio_filename))"
@@ -38,7 +51,7 @@ class MemoStore:
             present = {row["name"] for row in self._conn.execute("PRAGMA table_info(memos)")}
             for column in _COLUMNS:
                 if column not in present:
-                    self._conn.execute(f"ALTER TABLE memos ADD COLUMN {column} TEXT")
+                    self._conn.execute(f"ALTER TABLE memos ADD COLUMN {_declaration(column)}")
             self._conn.commit()
 
     def upsert(self, memo):
@@ -63,17 +76,30 @@ class MemoStore:
         return {row["audio_filename"] for row in rows}
 
     def list_by_status(self, status):
-        # Recording time, then ingest time as a stable tiebreak: the inbox list
-        # reads oldest-to-newest by when a memo was recorded, regardless of the order
-        # a startup catch-up (which scans the inbox by filename) happened to ingest
-        # them in. The bin re-sorts its own view by processed_at, so this ordering
-        # only shapes the pending inbox page.
+        # A memo the user dragged into place leads with its position. Everything else
+        # has no position and falls back to recording time, then ingest time as a stable
+        # tiebreak: an untouched inbox reads oldest-to-newest by when each memo was
+        # recorded, regardless of the order a startup catch-up (which scans the inbox by
+        # filename) happened to ingest them in. Unplaced memos sort after placed ones, so
+        # a recording that lands after a reorder joins the end rather than jumping the
+        # queue. The bin re-sorts its own view by processed_at, so this ordering only
+        # shapes the pending inbox page.
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM memos WHERE status = ? ORDER BY recorded_at, created_at",
+                "SELECT * FROM memos WHERE status = ? "
+                "ORDER BY position IS NULL, position, recorded_at, created_at",
                 (status,),
             ).fetchall()
         return [_row_to_memo(row) for row in rows]
+
+    def reorder(self, audio_filenames):
+        """Pin these memos to the given order, positioning them ahead of the rest."""
+        with self._lock:
+            self._conn.executemany(
+                "UPDATE memos SET position = ? WHERE audio_filename = ?",
+                list(enumerate(audio_filenames)),
+            )
+            self._conn.commit()
 
     def update(self, audio_filename, **changes):
         assignments = ", ".join(f"{column} = ?" for column in changes)

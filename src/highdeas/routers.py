@@ -8,9 +8,42 @@ from pathlib import Path
 import requests
 
 
+# A note is stored as plain text, so a list is just its Markdown line — which is
+# what the editor writes and reads back. Both destinations turn those lines into
+# real lists: HTML for Notesnook, Word's list styles for a Drive .docx.
+_BULLET = re.compile(r"^\s*[-*•]\s+(.*)$")
+_NUMBER = re.compile(r"^\s*\d+[.)]\s+(.*)$")
+
+
+def _list_item(line):
+    """The item text and its list tag ("ul"/"ol"), or (None, None) for prose."""
+    bullet = _BULLET.match(line)
+    if bullet:
+        return bullet.group(1).strip(), "ul"
+    number = _NUMBER.match(line)
+    if number:
+        return number.group(1).strip(), "ol"
+    return None, None
+
+
 def _text_to_html(text):
-    paragraphs = [html.escape(line.strip()) for line in text.split("\n") if line.strip()]
-    return "".join(f"<p>{p}</p>" for p in paragraphs) or "<p></p>"
+    parts = []
+    open_tag = None
+    for line in text.split("\n"):
+        item, tag = _list_item(line)
+        if tag != open_tag:
+            if open_tag:
+                parts.append(f"</{open_tag}>")
+            if tag:
+                parts.append(f"<{tag}>")
+            open_tag = tag
+        if tag:
+            parts.append(f"<li>{html.escape(item)}</li>")
+        elif line.strip():
+            parts.append(f"<p>{html.escape(line.strip())}</p>")
+    if open_tag:
+        parts.append(f"</{open_tag}>")
+    return "".join(parts) or "<p></p>"
 
 
 def _default_title(timestamp):
@@ -80,12 +113,19 @@ def _sanitize_filename(name):
     return cleaned or "untitled"
 
 
-def _write_docx(path, text):
+_LIST_STYLE = {"ul": "List Bullet", "ol": "List Number"}
+
+
+def write_docx(path, text):
     from docx import Document
 
     document = Document()
-    for paragraph in text.split("\n"):
-        document.add_paragraph(paragraph)
+    for line in text.split("\n"):
+        item, tag = _list_item(line)
+        if tag:
+            document.add_paragraph(item, style=_LIST_STYLE[tag])
+        else:
+            document.add_paragraph(line)
     document.save(str(path))
 
 
@@ -96,7 +136,7 @@ class DriveMusicRouter:
     bin — the memo is then recoverable there for 90 days regardless of what happens
     to the Drive copy."""
 
-    def __init__(self, inbox_dir, drive_base, *, today=_today, write_doc=_write_docx, copy=shutil.copy2):
+    def __init__(self, inbox_dir, drive_base, *, today=_today, write_doc=write_docx, copy=shutil.copy2):
         self._inbox = Path(inbox_dir)
         self._base = Path(drive_base)
         self._today = today

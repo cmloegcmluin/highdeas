@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from highdeas.routers import DriveMusicRouter, NotesnookRouter, Router
+from highdeas.routers import DriveMusicRouter, NotesnookRouter, Router, write_docx
 from highdeas.store import Memo
 
 
@@ -48,6 +48,42 @@ def test_notesnook_router_posts_title_and_html_body():
     assert body["source"] == "highdeas"
     assert body["version"] == 1
     assert body["content"] == {"type": "html", "data": "<p>buy milk</p><p>and eggs</p>"}
+
+
+def test_notesnook_router_turns_markdown_list_lines_into_real_html_lists():
+    # A note is stored as plain text, so a list is just its Markdown line. Notesnook
+    # takes HTML, so the lines become real <ul>/<ol> rather than arriving as literal
+    # "- " and "1. " prefixes inside paragraphs.
+    post = FakePost()
+
+    NotesnookRouter("K", post=post).route(Memo(
+        audio_filename="a.m4a", name="Plan",
+        transcript="Shopping:\n- milk\n- eggs\nThen:\n1. bake\n2) eat",
+    ))
+
+    assert post.calls[0][1]["json"]["content"]["data"] == (
+        "<p>Shopping:</p><ul><li>milk</li><li>eggs</li></ul>"
+        "<p>Then:</p><ol><li>bake</li><li>eat</li></ol>"
+    )
+
+
+def test_notesnook_router_escapes_list_items():
+    post = FakePost()
+
+    NotesnookRouter("K", post=post).route(Memo(audio_filename="a.m4a", name="X", transcript="- <b>hi</b>"))
+
+    assert post.calls[0][1]["json"]["content"]["data"] == "<ul><li>&lt;b&gt;hi&lt;/b&gt;</li></ul>"
+
+
+def test_write_docx_styles_list_lines_as_word_lists(tmp_path):
+    # The Drive .docx gets the same lists, as Word's own List Bullet / List Number
+    # styles — not paragraphs that happen to start with "- ".
+    from docx import Document
+
+    write_docx(tmp_path / "note.docx", "Intro\n- milk\n1. bake")
+
+    paragraphs = [(p.text, p.style.name) for p in Document(str(tmp_path / "note.docx")).paragraphs]
+    assert paragraphs == [("Intro", "Normal"), ("milk", "List Bullet"), ("bake", "List Number")]
 
 
 def test_notesnook_router_titles_unnamed_memo_with_its_recording_time():

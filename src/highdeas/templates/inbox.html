@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Inbox{% endblock %}
+
+{% block links %}
+  <div class="links">
+    <button type="button" id="refresh" class="refresh" title="Check for new notes now">Refresh</button>
+    <a href="/bin">Bin &rarr;</a>
+  </div>
+{% endblock %}
+
+{#- The notice is shown only when a submit/trash fails, so a note that didn't actually
+    send stays visible and explained instead of silently vanishing from the list. -#}
+{% block banners %}
+  <div id="notice" class="notice" role="alert" hidden></div>
+{% endblock %}
+
+{#- Bulk actions live in their own column headers so they sit directly over the
+    column they act on, instead of being pushed around by the topbar link. -#}
+{% block headrow %}
+  <div class="grid inbox headrow">
+    <div class="head"></div>
+    <div class="head">Audio</div>
+    <div class="head">Transcript</div>
+    <div class="head"></div>
+    <div class="head">Name</div>
+    <div class="head">Route</div>
+    <div class="head">Recorded</div>
+    <div class="head"><button type="button" id="submit-all" class="head-btn">Submit all</button></div>
+    <div class="head"><button type="button" id="trash-all" class="head-btn">Trash all</button></div>
+  </div>
+{% endblock %}
+
+{% block content %}{% include "rows.html" %}{% endblock %}
+
+{% block dialogs %}{% include "editor.html" %}{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='editor.js') }}"></script>
+<script src="{{ url_for('static', filename='inbox.js') }}"></script>
+{% endblock %}

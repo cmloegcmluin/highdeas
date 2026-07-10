@@ -1,6 +1,7 @@
 """Transcribe voice-memo audio locally with NVIDIA Parakeet (via onnx-asr)."""
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -35,10 +36,43 @@ def decode_to_wav(src, *, out_dir=None, ffmpeg_exe=None, runner=subprocess.run,
 DEFAULT_MODEL = "nemo-parakeet-tdt-0.6b-v3"
 
 
+@dataclass(frozen=True)
+class TimedWord:
+    """A spoken word and the second, into the recording, that it starts on."""
+    start: float
+    text: str
+
+
+@dataclass(frozen=True)
+class Transcript:
+    """What a recording said, and when it said each word."""
+    text: str
+    words: tuple = ()
+
+
 def _load_parakeet(name):
     import onnx_asr
 
-    return onnx_asr.load_model(name)
+    # The timestamped adapter reports the sub-word tokens and their emission times
+    # alongside the text, which is what lets the editor light up each word as the
+    # recording plays.
+    return onnx_asr.load_model(name).with_timestamps()
+
+
+def _to_words(tokens, timestamps):
+    """Gather the model's sub-word tokens into whole words with a start time.
+
+    The model emits tokens like " d", "ust", "ing", ".", each stamped with the
+    second it was spoken. A leading space starts a new word; everything else
+    continues the word before it — including trailing punctuation, which belongs
+    to the word it follows."""
+    words = []
+    for token, start in zip(tokens or (), timestamps or ()):
+        if words and not token[:1].isspace():
+            words[-1] = TimedWord(words[-1].start, words[-1].text + token)
+        else:
+            words.append(TimedWord(start, token.strip()))
+    return tuple(word for word in words if word.text)
 
 
 class Transcriber:
@@ -56,4 +90,5 @@ class Transcriber:
 
     def transcribe(self, audio_path):
         wav = self._decode(audio_path)
-        return self._get_model().recognize(wav)
+        recognized = self._get_model().recognize(wav)
+        return Transcript(recognized.text, _to_words(recognized.tokens, recognized.timestamps))

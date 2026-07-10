@@ -14,8 +14,9 @@ from highdeas.service import InboxService
 from highdeas.store import MemoStore
 from highdeas.transcribe import Transcriber
 from highdeas.web import create_app
+from highdeas.window_state import WindowGeometryTracker, load_geometry
 
-DEFAULT_INBOX = r"C:\Users\Douglas\iCloudDrive\iCloud~is~workflow~my~workflows\VoiceInbox"
+DEFAULT_INBOX = r"C:\Users\Douglas\iCloudDrive\iCloud~is~workflow~my~workflows\Highdeas"
 DEFAULT_DRIVE_BASE = r"G:\My Drive\voice memos (top level)"
 DEFAULT_CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +31,7 @@ def default_bin_dir(inbox_dir):
     every action — and a cancelled/hung move leaves the file behind to be
     re-ingested. Keeping the bin a sibling of the inbox means the move stays
     within iCloud: silent, and it actually completes."""
-    return str(Path(inbox_dir).parent / "VoiceBin")
+    return str(Path(inbox_dir).parent / "Highdeas Bin")
 
 APP_NAME = "Highdeas"
 # Windows taskbar identity. Must stay byte-for-byte identical to the
@@ -39,6 +40,8 @@ APP_NAME = "Highdeas"
 # If they drift, the taskbar falls back to pythonw.exe's generic python icon.
 APP_ID = "Douglas.Highdeas"
 APP_ICON = PROJECT_ROOT / "highdeas.ico"
+# Where the window's size, position, and maximized state are remembered between launches.
+WINDOW_STATE = PROJECT_ROOT / "window.json"
 
 # Shown instantly in the native window for the brief moment before the local server
 # accepts connections, so the user never stares at a blank frame. Self-contained; the
@@ -67,10 +70,10 @@ _SPLASH_HTML = """<!doctype html>
 
 def build_app():
     load_dotenv(PROJECT_ROOT / ".env")
-    inbox_dir = os.environ.get("VOICE_INBOX_DIR", DEFAULT_INBOX)
-    db_path = os.environ.get("VOICE_DB", str(PROJECT_ROOT / "memos.db"))
-    bin_dir = os.environ.get("VOICE_BIN_DIR", default_bin_dir(inbox_dir))
-    drive_base = os.environ.get("VOICE_DRIVE_BASE", DEFAULT_DRIVE_BASE)
+    inbox_dir = os.environ.get("HIGHDEAS_INBOX_DIR", DEFAULT_INBOX)
+    db_path = os.environ.get("HIGHDEAS_DB", str(PROJECT_ROOT / "memos.db"))
+    bin_dir = os.environ.get("HIGHDEAS_BIN_DIR", default_bin_dir(inbox_dir))
+    drive_base = os.environ.get("HIGHDEAS_DRIVE_BASE", DEFAULT_DRIVE_BASE)
     notesnook = NotesnookRouter(os.environ.get("NOTESNOOK_INBOX_API_KEY", ""))
     drive = DriveMusicRouter(inbox_dir, drive_base)
     transcriber = Transcriber()
@@ -90,8 +93,8 @@ def _chrome_launcher():
     """Return a callable that opens a URL in a specific Chrome profile. Drive is
     signed into the wanted Google account only in that profile, and a link can't
     choose one, so launch Chrome directly with --profile-directory."""
-    chrome = os.environ.get("VOICE_CHROME_EXE", DEFAULT_CHROME)
-    profile = os.environ.get("VOICE_CHROME_PROFILE", "Default")
+    chrome = os.environ.get("HIGHDEAS_CHROME_EXE", DEFAULT_CHROME)
+    profile = os.environ.get("HIGHDEAS_CHROME_PROFILE", "Default")
 
     def launch(url):
         subprocess.Popen([chrome, f"--profile-directory={profile}", url])
@@ -103,7 +106,7 @@ def main():
     _set_windows_app_id()
     app, service = build_app()
     _transcribe_in_background(service)
-    if os.environ.get("VOICE_DESKTOP", "1") == "1" and _run_desktop(app):
+    if os.environ.get("HIGHDEAS_DESKTOP", "1") == "1" and _run_desktop(app):
         return
     _run_browser(app)
 
@@ -138,9 +141,7 @@ def _run_desktop(app):
     ).start()
 
     try:
-        window = webview.create_window(
-            APP_NAME, html=_SPLASH_HTML, width=1360, height=900, background_color="#0f172a",
-        )
+        window = _open_window(webview, WINDOW_STATE)
         url = f"http://127.0.0.1:{port}/"
         # pywebview 6's winforms backend applies this to the window (and thus the taskbar
         # button); without it Windows shows pythonw.exe's icon. The docstring's "GTK/QT
@@ -156,6 +157,17 @@ def _run_desktop(app):
         return False
 
 
+def _open_window(webview, state_path):
+    """Open the native window where it was left — same monitor, size, and maximized
+    state — and keep following it so the next launch can do the same."""
+    geometry = load_geometry(state_path).reachable_on(webview.screens)
+    window = webview.create_window(
+        APP_NAME, html=_SPLASH_HTML, background_color="#0f172a", **geometry.window_kwargs(),
+    )
+    WindowGeometryTracker(state_path, geometry).attach(window)
+    return window
+
+
 def _open_when_ready(window, url, wait_until_ready):
     """Wait for the local server, then swap the splash for the real app. The model
     load and backlog transcription happen in the background, never on this path."""
@@ -164,8 +176,8 @@ def _open_when_ready(window, url, wait_until_ready):
 
 
 def _run_browser(app):
-    port = int(os.environ.get("VOICE_PORT", "5000"))
-    if os.environ.get("VOICE_OPEN_BROWSER", "1") == "1":
+    port = int(os.environ.get("HIGHDEAS_PORT", "5000"))
+    if os.environ.get("HIGHDEAS_OPEN_BROWSER", "1") == "1":
         threading.Timer(1.5, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
     app.run(port=port)
 

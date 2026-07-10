@@ -1,0 +1,24 @@
+{#- Chrome shared by the inbox and bin pages, so nothing jumps when you flip
+    between them: same title bar, same frozen header, same grid widths. -#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <div class="frozen">
+    <div class="topbar">
+      <h1>{{ self.title() }} <span id="count">— {{ memos|length }} item{{ 's' if memos|length != 1 else '' }}</span></h1>
+      {% block links %}{% endblock %}
+    </div>
+    {% block banners %}{% endblock %}
+    {% if memos %}{% block headrow %}{% endblock %}{% endif %}
+  </div>
+  <main id="content">{% block content %}{% endblock %}</main>
+  {% block dialogs %}{% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>
