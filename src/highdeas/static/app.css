@@ -29,6 +29,10 @@ h1 { font-size: 1.35rem; margin: 0; }
        transition: color .15s, border-color .15s; }
 .btn:not(:disabled):hover { border-color: #3b82f6; color: #3b82f6; }
 .btn.danger:not(:disabled):hover { border-color: #e5484d; color: #e5484d; }
+/* Most of them say their action with a glyph rather than a word, and every glyph is
+   drawn at one size and centred in its button. The two that want their own size —
+   the topbar's and the row's chevron — ask for it below, so this must stay above them. */
+.btn svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
 
 /* The title bar and the column headers stay pinned while the rows scroll, so the
    item count and the bulk (Submit/Trash/Restore/Empty) buttons are always in reach. */
@@ -43,7 +47,7 @@ h1 { font-size: 1.35rem; margin: 0; }
 /* The three that act on the list are glyphs, so they get a square target rather than a
    label-shaped one. Their names live in a title and an aria-label. */
 .topbtn.icon { padding: 7px; }
-.topbtn svg { width: 17px; height: 17px; display: block; }
+.topbtn svg { width: 17px; height: 17px; }
 /* A check is otherwise instant: spin the arrows for a beat so the press visibly lands.
    A word swapped in for a beat was the old way, and a picture has no word to swap. */
 #refresh.spinning svg { animation: spin .7s linear infinite; }
@@ -113,11 +117,10 @@ h1 { font-size: 1.35rem; margin: 0; }
 /* Bulk actions live in their own column headers so they sit directly over the
    column they act on, instead of being pushed around by the topbar buttons. */
 .head form { width: 100%; margin: 0; }
+/* Every head wears the glyph of the column it presses — a paper plane over the Submits,
+   a bin over the bins, an arrow doubling back over the Restores. */
 .head-btn { width: 100%; padding: 4px 9px; font-size: .72rem;
             text-transform: none; letter-spacing: normal; }
-/* The inbox's two heads wear the glyph of the column they press — a paper plane over
-   the Submits, a bin over the bins. The bin page's heads still speak. */
-.head-btn svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
 
 /* Inbox rows */
 .memo { display: contents; }
@@ -190,12 +193,11 @@ h1 { font-size: 1.35rem; margin: 0; }
    of the row. */
 .memo .move { padding: 0; height: 40px;
               display: flex; align-items: center; justify-content: center; }
-.memo .move svg { width: 20px; height: 20px; display: block; transition: transform .15s; }
+.memo .move svg { width: 20px; height: 20px; transition: transform .15s; }
 .memo .move.back svg { transform: rotate(180deg); }
 .memo .move:disabled { opacity: .15; }
 /* The paper plane and the bin, each matching the head that presses its whole column. */
 .memo .go, .memo .del { padding: 9px 0; }
-.memo .go svg, .memo .del svg { width: 16px; height: 16px; display: block; margin: 0 auto; }
 /* The destination picker: three radio-backed brand icons; the checked one is lit,
    the rest sit dimmed (half-lit on hover). */
 .route-cell { display: flex; flex-direction: column; gap: 6px; }
@@ -244,7 +246,10 @@ h1 { font-size: 1.35rem; margin: 0; }
 .row .destlink { display: flex; align-items: center; text-decoration: none;
                  background: transparent; border: none; padding: 0; cursor: pointer; }
 .row .dest form { display: contents; }
-.binbtn { width: 100%; padding: 8px 0; }
+/* The bin's two actions are glyphs, like the inbox row's: the same arrow doubling back
+   and the same bin their column heads wear. Their names live in a title and an
+   aria-label, and the words they dropped are spoken in full by the confirm they raise. */
+.binbtn { width: 100%; padding: 9px 0; }
 .row form { width: 100%; margin: 0; }
 
 /* ---- The note editor -------------------------------------------------------

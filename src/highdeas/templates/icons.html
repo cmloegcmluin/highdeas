@@ -24,6 +24,13 @@
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
 {%- endmacro %}
 
+{#- An arrow coming the whole way back around: lift this out of the bin and put it back
+    in the inbox. Worn by every bin row's Restore and by the column head above them.
+    Its one arc and one arrowhead keep it apart from Refresh's two of each. -#}
+{% macro restore() -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+{%- endmacro %}
+
 {% macro trash() -%}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
 {%- endmacro %}

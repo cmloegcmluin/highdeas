@@ -627,10 +627,11 @@ def test_a_column_of_submits_and_its_bulk_head_wear_the_same_glyph(tmp_path):
     # same way — one paper plane over a column of them, one bin over a column of bins.
     assert 'id="submit-all" class="btn head-btn" title="Submit all" aria-label="Submit all"' in body
     assert 'id="trash-all" class="btn head-btn danger" title="Trash all" aria-label="Trash all"' in body
-    assert 'class="btn go" title="Submit" aria-label="Submit"' in body
+    assert 'class="btn go" title="Submit" aria-label="Submit"><svg' in body
     assert ">Submit all<" not in body and ">Trash all<" not in body
     assert ">Submit</button>" not in body
-    assert ".head-btn svg" in css and ".memo .go svg" in css
+    # One rule draws every glyph a button wears, so a head and its column can't drift.
+    assert ".btn svg {" in css
     # The editor's button still speaks: it is the only one left with a word to say.
     assert ">Done</button>" in body
 
@@ -924,6 +925,9 @@ def test_topbar_controls_are_buttons_not_text_links(tmp_path):
     # .topbtn's smaller type — the topbar buttons render at 16px instead of 13.6px.
     for variant in (".topbtn {", ".head-btn {", ".binbtn {", ".play {", ".tool {"):
         assert css.index(".btn {") < css.index(variant), variant
+    # Same hazard one level down: .btn svg sizes every glyph, and .topbtn svg only wins
+    # its 17px by coming later — reordered, the topbar's icons silently shrink to 16px.
+    assert css.index(".btn svg {") < css.index(".topbtn svg {")
 
 
 def test_refresh_button_spins_and_locks_for_a_held_beat_while_it_checks(tmp_path):
@@ -1303,6 +1307,26 @@ def test_bin_bulk_controls_sit_in_the_column_headers_and_confirm(tmp_path):
     assert body.index('grid bin headrow') < body.index('action="/restore-all"')
     # Both bulk actions confirm first (restore-all is disruptive, empty-bin destroys).
     assert body.count("confirm(") >= 2
+
+
+def test_the_bins_columns_of_buttons_and_their_bulk_heads_wear_the_same_glyphs(tmp_path):
+    service = FakeService(binned=[
+        Memo(audio_filename="b.m4a", status="deleted", processed_at="2026-07-07T03:00"),
+    ])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/bin").data.decode()
+
+    # The bin's heads speak the way the inbox's do: a glyph over a column of the same
+    # glyph. Restore's arrow doubles back, Delete's is the bin the inbox trashes into.
+    assert 'class="btn head-btn" title="Restore all" aria-label="Restore all"><svg' in body
+    assert 'class="btn head-btn danger" title="Empty bin" aria-label="Empty bin"><svg' in body
+    assert 'class="btn binbtn" title="Restore" aria-label="Restore"><svg' in body
+    assert 'class="btn binbtn danger" title="Delete" aria-label="Delete"><svg' in body
+    for word in (">Restore all<", ">Empty bin<", ">Restore<", ">Delete<"):
+        assert word not in body, word
+    # The words are gone from the buttons, not from the page: each confirm still says them.
+    assert "Restore all 1 item to the inbox?" in body
 
 
 def test_bin_back_control_is_a_button_not_a_text_link(tmp_path):

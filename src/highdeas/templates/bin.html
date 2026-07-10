@@ -8,8 +8,13 @@
     nor a checkbox, and held their columns open with empties for no one. It starts at the
     group badge instead. Its rows keep the inbox's overall width — the two pages' bulk
     buttons still sit above the same two columns — and the transcript takes back the
-    room the empties cost. -#}
+    room the empties cost.
+
+    As on the inbox, each bulk head wears the glyph of the column it presses. A glyph has
+    no text to name it, so both carry their name in a title and an aria-label; the words
+    the buttons dropped are still spoken in full by the confirm they raise. -#}
 {% block headrow %}
+  {% from "icons.html" import restore, trash %}
   <div class="grid bin headrow">
     <div class="head"></div>
     <div class="head">When</div>
@@ -17,13 +22,13 @@
     <div class="head">Transcript</div>
     <div class="head">Name</div>
     <div class="head">Where</div>
-    <div class="head"><form method="post" action="/restore-all" onsubmit="return confirm('Restore all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }} to the inbox?');"><button class="btn head-btn" type="submit">Restore all</button></form></div>
-    <div class="head"><form method="post" action="/empty-bin" onsubmit="return confirm('Permanently delete all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }}? This cannot be undone.');"><button class="btn head-btn danger" type="submit">Empty bin</button></form></div>
+    <div class="head"><form method="post" action="/restore-all" onsubmit="return confirm('Restore all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }} to the inbox?');"><button type="submit" class="btn head-btn" title="Restore all" aria-label="Restore all">{{ restore() }}</button></form></div>
+    <div class="head"><form method="post" action="/empty-bin" onsubmit="return confirm('Permanently delete all {{ memos|length }} item{{ 's' if memos|length != 1 else '' }}? This cannot be undone.');"><button type="submit" class="btn head-btn danger" title="Empty bin" aria-label="Empty bin">{{ trash() }}</button></form></div>
   </div>
 {% endblock %}
 
 {% block content %}
-  {% from "icons.html" import notesnook, drive, asana, kind_cell %}
+  {% from "icons.html" import notesnook, drive, asana, restore, trash, kind_cell %}
   {% if not memos %}
   <p class="empty">Nothing in the bin. Submitted and deleted memos land here (kept for 90 days).</p>
   {% else %}
@@ -48,8 +53,8 @@
         {%- else %}<span title="Sent to Notesnook" aria-label="Sent to Notesnook">{{ notesnook() }}</span>
         {%- endif %}
         {%- endif %}</div>
-      <div><form method="post" action="/restore/{{ m.audio_filename }}"><button class="btn binbtn" type="submit">Restore</button></form></div>
-      <div><form method="post" action="/purge/{{ m.audio_filename }}" onsubmit="return confirm('Permanently delete this recording? This cannot be undone.');"><button class="btn binbtn danger" type="submit">Delete</button></form></div>
+      <div><form method="post" action="/restore/{{ m.audio_filename }}"><button type="submit" class="btn binbtn" title="Restore" aria-label="Restore">{{ restore() }}</button></form></div>
+      <div><form method="post" action="/purge/{{ m.audio_filename }}" onsubmit="return confirm('Permanently delete this recording? This cannot be undone.');"><button type="submit" class="btn binbtn danger" title="Delete" aria-label="Delete">{{ trash() }}</button></form></div>
     </div>
     {% endfor %}
   </div>
