@@ -5,7 +5,15 @@
     dialog, where the whole note — waveform, spoken-word highlighting, title,
     lists — has room to be worked on. The row carries the memo's word timings so
     the editor can highlight along with the audio without a second request. -#}
-{% from "icons.html" import notesnook, drive, trash %}
+{% from "icons.html" import notesnook, drive, trash, clipboard, check %}
+
+{#- A copy-to-clipboard button, pinned inside its cell. It carries both the clipboard
+    and the check icon; the client swaps them with a `.copied` class, so confirming a
+    copy costs no DOM surgery. It is the transcript's sibling, never its child: a click
+    on it must not reach the preview's open-the-editor handler. -#}
+{% macro clip(field) -%}
+<button type="button" class="clip" data-copy="{{ field }}" title="Copy {{ field }}" aria-label="Copy {{ field }}"><span class="ic-copy">{{ clipboard() }}</span><span class="ic-ok">{{ check() }}</span></button>
+{%- endmacro %}
 {% if not memos %}
   {% if incoming %}
   <p class="empty">Transcribing your memos…</p>
@@ -19,9 +27,15 @@
   <div class="memo" data-file="{{ m.audio_filename }}" data-words="{{ m.word_times }}">
     <div class="num" draggable="true" title="Drag to move this note">{{ loop.index }}</div>
     <audio controls src="/audio/{{ m.audio_filename }}"></audio>
-    <div class="transcript" role="button" tabindex="0" title="Open the editor" aria-label="Edit transcript">{{ m.transcript }}</div>
+    <div class="cell">
+      <div class="transcript" role="button" tabindex="0" title="Open the editor" aria-label="Edit transcript">{{ m.transcript }}</div>
+      {{ clip('transcript') }}
+    </div>
     <button type="button" class="move" title="Move transcript into Name" aria-label="Move transcript into Name">&rsaquo;</button>
-    <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
+    <div class="cell oneline">
+      <input type="text" name="name" value="{{ m.name }}" placeholder="Name…" autocomplete="off" aria-label="Name">
+      {{ clip('name') }}
+    </div>
     <label class="toggle" title="Left = Notesnook, right = Google Drive">
       <input type="checkbox" name="route" value="drive" {{ 'checked' if m.route == 'drive' }}>
       <span class="ic ns" aria-label="Notesnook">{{ notesnook() }}</span>

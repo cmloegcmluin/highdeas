@@ -66,6 +66,23 @@ h1 { font-size: 1.35rem; margin: 0; }
                     transition: border-color .15s, background .15s; }
 .memo .transcript:hover, .memo .transcript:focus-visible { border-color: #3b82f6; }
 .memo .transcript:empty::before { content: "Add a transcript…"; opacity: .45; }
+/* A copy button rides inside its cell rather than claiming a grid column of its own,
+   so the inbox keeps the widths the bin grid mirrors. The cell's contents pad right to
+   keep their text out from under the button. */
+.cell { position: relative; }
+.cell .transcript, .cell input[type=text] { padding-right: 34px; }
+.memo .clip { position: absolute; top: 7px; right: 6px; width: 24px; height: 24px;
+              display: flex; align-items: center; justify-content: center; padding: 0;
+              border: none; border-radius: 6px; background: transparent; color: inherit;
+              opacity: .35; cursor: pointer; transition: opacity .15s, color .15s; }
+/* A one-line cell centres its button; the transcript anchors it to the first line. */
+.cell.oneline .clip { top: 50%; transform: translateY(-50%); }
+.memo .clip:hover { opacity: 1; color: #3b82f6; }
+.memo .clip svg { width: 15px; height: 15px; display: block; }
+/* Copied: hold a green check for a beat, since the clipboard gives no sign of its own. */
+.memo .clip.copied { opacity: 1; color: #30a46c; }
+.memo .clip .ic-ok, .memo .clip.copied .ic-copy { display: none; }
+.memo .clip.copied .ic-ok { display: block; }
 /* A row whose submit/trash just failed: outline its fields so it's obvious which
    one stayed behind. */
 .memo.failed .transcript, .memo.failed input[type=text] { border-color: #e5484d; }

@@ -204,6 +204,33 @@
     });
   }
 
+  // Copy a cell's text to the clipboard and hold a check on its button for a beat —
+  // the clipboard gives no sign of its own that the copy landed.
+  var COPIED_MS = 1200;
+  var COPY_SOURCES = {
+    transcript: transcriptOf,
+    name: function (memo) { return memo.querySelector('input[name=name]').value; },
+  };
+
+  function writeClipboard(text) {
+    try {
+      return navigator.clipboard.writeText(text);
+    } catch (err) {
+      return Promise.reject(err);  // no Clipboard API at all (insecure origin, old webview)
+    }
+  }
+
+  function copyCell(btn, memo) {
+    clearNotice();
+    writeClipboard(COPY_SOURCES[btn.dataset.copy](memo)).then(function () {
+      btn.classList.add('copied');
+      clearTimeout(btn._copied);
+      btn._copied = setTimeout(function () { btn.classList.remove('copied'); }, COPIED_MS);
+    }).catch(function (err) {
+      notify("Couldn't copy that to the clipboard." + describe(err));
+    });
+  }
+
   function wire(memo) {
     var preview = memo.querySelector('.transcript');
     var name = memo.querySelector('input[name=name]');
@@ -233,6 +260,9 @@
       name.value = transcriptOf(memo);
       preview.textContent = '';
       flush(memo);
+    });
+    memo.querySelectorAll('.clip').forEach(function (btn) {
+      btn.addEventListener('click', function () { copyCell(btn, memo); });
     });
     memo.querySelector('.go').addEventListener('click', function () {
       clearNotice();

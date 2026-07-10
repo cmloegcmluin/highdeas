@@ -96,6 +96,40 @@ def test_index_renders_inbox_controls(tmp_path):
     assert b'class="move"' in body
 
 
+def test_inbox_transcript_has_a_copy_to_clipboard_button(tmp_path):
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    # A button pinned inside the transcript preview puts its text on the clipboard,
+    # for pasting the note somewhere the app doesn't route to.
+    assert 'data-copy="transcript"' in body
+    assert "clipboard.writeText" in asset(client, "inbox.js")
+
+
+def test_inbox_name_has_a_copy_to_clipboard_button(tmp_path):
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi", name="Idea")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    # The name field gets the same button, so a title can be lifted out on its own.
+    assert 'data-copy="name"' in body
+
+
+def test_copy_button_confirms_a_copy_and_reports_a_failed_one(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "inbox.js")
+
+    # A copy leaves no trace of its own, so the button holds a check for a beat…
+    assert ".clip.copied" in asset(client, "app.css")
+    assert "classList.add('copied')" in js
+    # …and a clipboard the browser won't hand over says so, rather than looking copied.
+    assert "Couldn't copy" in js
+
+
 def test_index_trash_all_asks_for_confirmation(tmp_path):
     client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
