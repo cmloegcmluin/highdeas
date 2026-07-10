@@ -92,10 +92,14 @@ h1 { font-size: 1.35rem; margin: 0; }
   width: 100%; box-sizing: border-box; padding: 8px; font: inherit;
   border: 1px solid rgba(128,128,128,.4); border-radius: 8px; background: transparent; color: inherit; }
 /* The transcript is a preview, not a field: it opens the editor dialog, where the
-   note has room to be worked on. Clamped so a long memo can't stretch its row. */
+   note has room to be worked on. So it is a fixed three-line box — three line boxes
+   (1.45em each), plus its 8px padding and 1px border top and bottom. Sizing it to its
+   contents instead made the list jump every time text crossed the arrow: an emptied
+   transcript shrank its row, a filled one grew it. The whole note is one click away,
+   so the preview never wants to be taller than the row it has to keep still. */
 .memo .transcript { box-sizing: border-box; padding: 8px; font: inherit; cursor: pointer;
                     border: 1px solid rgba(128,128,128,.4); border-radius: 8px;
-                    white-space: pre-wrap; overflow: hidden; min-height: 60px;
+                    white-space: pre-wrap; overflow: hidden; height: calc(3 * 1.45em + 18px);
                     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
                     transition: border-color .15s, background .15s; }
 .memo .transcript:hover, .memo .transcript:focus-visible { border-color: #3b82f6; }

@@ -429,6 +429,19 @@ def test_a_rows_transcript_is_a_preview_that_opens_the_editor(tmp_path):
     assert ">hello there</div>" in body
 
 
+def test_every_inbox_row_is_the_same_height_whether_or_not_it_has_a_transcript(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    preview = asset(client, "app.css").split(".memo .transcript {")[1].split("}")[0]
+
+    # A min-height grew the row from one line to three as the note filled up, so the
+    # list jumped every time text crossed the arrow. The preview is a fixed three-line
+    # box now: the whole note is one click away in the editor, so it never needs more.
+    assert "min-height" not in preview
+    assert "height: calc(3 * 1.45em" in preview
+    assert "-webkit-line-clamp: 3" in preview
+
+
 def test_a_row_carries_its_word_timings_so_the_editor_can_highlight_along(tmp_path):
     # The timings ride along on the row, so opening the editor costs no extra request.
     service = FakeService(pending=[
