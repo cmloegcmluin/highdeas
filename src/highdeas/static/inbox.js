@@ -120,12 +120,19 @@
 
   function save(memo) { return post(urlFor('/edit/', memo), fields(memo)); }
 
+  // _timer holds the pending auto-save and doubles as the "mid-edit" signal
+  // the poll's busy() reads, so it must be cleared the moment the save fires —
+  // a stale id would leave the row repaint-proof forever.
   function scheduleSave(memo) {
     clearTimeout(memo._timer);
-    memo._timer = setTimeout(function () { save(memo); }, 400);
+    memo._timer = setTimeout(function () { memo._timer = null; save(memo); }, 400);
   }
 
-  function flush(memo) { clearTimeout(memo._timer); return save(memo); }
+  function flush(memo) {
+    clearTimeout(memo._timer);
+    memo._timer = null;
+    return save(memo);
+  }
 
   // A button whose face is a glyph has no text to name it, so its name lives where the
   // pointer and the screen reader will each find it.
