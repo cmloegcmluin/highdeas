@@ -181,13 +181,20 @@ Everything but the keys for the destinations you use is optional. Set these in `
 
 ## Not yet wired
 
-- The desktop app on the Mac laptop, as a full peer: ingest/transcribe/route on the
-  Mac too, with inbox+bin+DB moved into a folder both machines sync (decided with
-  Douglas 2026-07-10, deferred to its own session). The landmine to design around:
-  SQLite inside a sync folder corrupts under concurrent writers — needs a
-  single-writer rule or per-memo state files. Also entails porting the native
-  window off its winforms-specific bits (`window_state.py` reads
-  `window.native.WindowState`).
+- No-special-machine Highdeas (decided with Douglas 2026-07-10, deferred to its own
+  session): both desks run the full app against state in a folder both machines
+  sync; the iOS app pushes to a *list* of peers — whichever answers first — over
+  Tailscale so it works away from home too. Building blocks and landmines, in
+  dependency order: (1) shared memo state is the kernel — SQLite inside a sync
+  folder corrupts under concurrent writers, so it needs a single-writer rule or
+  per-memo state files; (2) multi-peer push must wait for (1), or memos scatter
+  across per-machine inboxes (the upload endpoint's content-key dedupe already
+  makes double-delivery harmless); (3) the phone's plain-HTTP is allowed to local
+  addresses only — the Tailscale leg wants `tailscale cert` HTTPS or a targeted
+  ATS exception; (4) the native window is winforms-coupled (`window_state.py`
+  reads `window.native.WindowState`). Do NOT route recordings through an
+  iCloud-synced folder instead — the Windows leg of iCloud sync is the
+  sometimes-hours-late link this project exists to remove.
 - Grouping a multi-clip memo into one shared numbered doc.
 - A single-file standalone `.exe`. The taskbar shortcut still launches through the
   project's `.venv` (`pythonw run_highdeas.py`), so this folder and its virtualenv need
