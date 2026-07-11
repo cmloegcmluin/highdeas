@@ -91,6 +91,11 @@ pin `Highdeas.lnk` instead.
 relaunched automatically once you've left the window alone for a minute. Offline
 machines skip all of it quietly; a diverged checkout launches what it has.
 
+**A new machine's `.env` needs more than paths:** copy `NOTESNOOK_INBOX_API_KEY`,
+`ASANA_ACCESS_TOKEN`, `ASANA_PARENT_TASKS`, and `HIGHDEAS_UPLOAD_TOKEN` from an
+existing machine's `.env` (and set a machine-appropriate `HIGHDEAS_DRIVE_BASE`),
+or submits from that machine fail with auth errors while everything else hums.
+
 **On the Mac:** run `tools/make_mac_app.sh` once — it builds `/Applications/Highdeas.app`
 (leaf icon and all) pointed at this repo's venv. Open it, then right-click its Dock tile →
 Options → **Keep in Dock**. Rebuild after moving the repo or changing the icon. (While
