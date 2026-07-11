@@ -596,6 +596,10 @@
   }
 
   function wire(memo) {
+    // The row as the server rendered it. The poll compares fresh server rows
+    // against this — never against the live DOM, which drifts as the user
+    // types and classes flicker — to see if another machine changed the memo.
+    memo._served = memo.outerHTML;
     var preview = previewOf(memo);
     var name = nameField(memo);
     var parent = parentField(memo);
@@ -713,32 +717,59 @@
     });
   });
 
-  // Keep the list current with recordings that arrive while the app is open.
-  // Poll the server (it rescans the inbox) and splice in only memos we're not
-  // already showing, leaving existing rows — their edits, focus, and playback —
-  // untouched.
+  // Keep the list current with the rest of the world: recordings that arrive
+  // while the app is open, and — now that another machine shares this store —
+  // memos renamed, edited, or retired from the other desk. New rows splice in,
+  // changed rows are repainted from the server's render, gone rows leave. A row
+  // the user is in the middle of touching is left alone until the next pass:
+  // an unsaved edit here beats a stale repaint, and will win server-side too.
   var POLL_MS = 5000;
+
+  function busy(memo) {
+    if (memo._timer) return true;  // an edit is waiting on the auto-save timer
+    if (memo.contains(document.activeElement)) return true;
+    var audio = memo.querySelector('audio');
+    return !!(audio && !audio.paused);
+  }
 
   function merge(html) {
     var incoming = document.createElement('div');
     incoming.innerHTML = html;
-    var shown = {};
-    rows().forEach(function (m) { shown[m.dataset.file] = true; });
-    var fresh = [];
+    var arriving = {};
     incoming.querySelectorAll('.memo').forEach(function (memo) {
+      arriving[memo.dataset.file] = memo;
+    });
+    var changed = false;
+    rows().forEach(function (memo) {
       var file = memo.dataset.file;
-      if (!shown[file] && !retired[file]) fresh.push(memo);
+      var next = arriving[file];
+      delete arriving[file];
+      if (!next) {
+        // Gone from the server: retired on the other machine (or another tab).
+        if (!busy(memo)) { memo.remove(); changed = true; }
+        return;
+      }
+      if (next.outerHTML !== memo._served && !busy(memo)) {
+        var picked = memo.querySelector('.pick').checked;
+        memo.replaceWith(next);
+        wire(next);
+        next.querySelector('.pick').checked = picked;
+        changed = true;
+      }
     });
-    if (!fresh.length) return;
-    var grid = content.querySelector('.grid');
-    if (!grid) { location.reload(); return; }  // empty page: reload to build the grid + frozen header
-    // Fresh notes join the end, matching where the server sorts an unplaced memo, so a
-    // hand-arranged inbox isn't reshuffled by a recording that lands mid-session.
-    fresh.forEach(function (memo) {
-      grid.appendChild(memo);
-      wire(memo);
-    });
-    resync();
+    var fresh = Object.keys(arriving).filter(function (file) { return !retired[file]; });
+    if (fresh.length) {
+      var grid = content.querySelector('.grid');
+      if (!grid) { location.reload(); return; }  // empty page: reload to build the grid + frozen header
+      // Fresh notes join the end, matching where the server sorts an unplaced memo, so a
+      // hand-arranged inbox isn't reshuffled by a recording that lands mid-session.
+      fresh.forEach(function (file) {
+        grid.appendChild(arriving[file]);
+        wire(arriving[file]);
+      });
+      changed = true;
+    }
+    if (changed) resync();
   }
 
   function check() {

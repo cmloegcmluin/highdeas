@@ -321,8 +321,11 @@ def _dress_mac_dock():
 
         icon = PROJECT_ROOT / "highdeas-dock.png"
         if icon.is_file():
-            NSApplication.sharedApplication().setApplicationIconImage_(
-                NSImage.alloc().initWithContentsOfFile_(str(icon)))
+            # This runs on a pywebview worker thread; AppKit renders an alpha
+            # image corruptly (a black tile) unless the paint happens on the
+            # main thread's run loop.
+            NSApplication.sharedApplication().performSelectorOnMainThread_withObject_waitUntilDone_(
+                "setApplicationIconImage:", NSImage.alloc().initWithContentsOfFile_(str(icon)), False)
     except Exception:  # noqa: BLE001 — cosmetics must never break the launch
         pass
 
