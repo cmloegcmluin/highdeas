@@ -22,3 +22,8 @@ window.json
 xcuserdata/
 ios/**/.build/
 ios/**/DerivedData/
+
+# Xcode / SwiftPM build artifacts
+ios/HighdeasKit/.build/
+ios/build/
+*.xcuserdatad/
