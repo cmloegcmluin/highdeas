@@ -14,6 +14,16 @@
       <h1>{{ self.title() }} <span id="count">— {{ memos|length }} item{{ 's' if memos|length != 1 else '' }}</span></h1>
       {% block links %}{% endblock %}
     </div>
+    {#- The page's own find. Ctrl+F reveals it (find.js) and it filters the list to the
+        rows whose name or transcript holds what's typed — reaching the whole transcript,
+        the part the three-line preview clips off included, which the browser's find can't.
+        Hidden until called for, and part of the shared chrome, so the inbox and the bin
+        both have it. -#}
+    <div id="find" class="find" hidden>
+      <input type="search" id="find-input" class="find-input" placeholder="Find in {{ self.title() }}…" autocomplete="off" aria-label="Find in {{ self.title() }}">
+      <span id="find-tally" class="find-tally" aria-live="polite"></span>
+      <button type="button" id="find-close" class="find-close" title="Close (Esc)" aria-label="Close find">&times;</button>
+    </div>
     {#- The one condition the window can't otherwise show: the LAN listener
         died or never started, so the phone's pushes go unanswered while
         everything visible hums. app.py plants the sentence when it happens
@@ -29,6 +39,7 @@
   {% include "ask.html" %}
   {% block dialogs %}{% endblock %}
   <script src="{{ url_for('static', filename='ask.js') }}"></script>
+  <script src="{{ url_for('static', filename='find.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

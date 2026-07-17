@@ -1955,3 +1955,125 @@ def test_a_refused_update_reports_and_stays_alive():
     assert response.status_code == 502
     assert b"cannot fast-forward" in response.data
     assert updates.respawned == 0
+
+
+def test_every_page_carries_the_in_page_find(tmp_path):
+    # "A Ctrl+F for each page." The browser's own find can't reach a transcript the
+    # three-line preview clips off, nor the bin's scrolled text box — so both pages
+    # carry our own find, and it lives in the shared chrome rather than one page's markup.
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")],
+                          binned=[Memo(audio_filename="b.m4a", status="deleted",
+                                       processed_at="2026-07-07T03:00")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    inbox = client.get("/").data.decode()
+    binned = client.get("/bin").data.decode()
+
+    for body in (inbox, binned):
+        assert 'id="find"' in body
+        assert 'id="find-input"' in body
+        assert "/static/find.js" in body
+    # It names the page it searches, and starts hidden until Ctrl+F calls it up.
+    assert 'placeholder="Find in Inbox…"' in inbox
+    assert 'placeholder="Find in Bin…"' in binned
+    assert 'id="find" class="find" hidden' in inbox
+
+
+def test_find_opens_on_ctrl_f_and_steps_aside_for_a_dialog(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "find.js")
+
+    # Ctrl+F — and ⌘F on a Mac — opens ours instead of the browser's, whose match can't
+    # reach the clipped preview; it takes the key off the browser so both can't answer it.
+    assert "event.ctrlKey || event.metaKey" in js
+    assert "'f'" in js
+    assert "event.preventDefault()" in js
+    # Esc closes ours again.
+    assert "'Escape'" in js
+    # But an open dialog keeps the keys to itself: the editor's body is a long text the
+    # browser's own find is the right tool for, and Esc there closes the editor.
+    assert "dialog[open]" in js
+
+
+def test_find_filters_both_pages_by_a_rows_whole_name_and_transcript(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "find.js")
+    css = asset(client, "app.css")
+
+    # One filter serves both pages: it hides the inbox's .memo rows and the bin's .row
+    # rows the same way, matching a row by its name and its transcript wherever each
+    # lives — an editable field or a plain cell, a .transcript preview or a .text block.
+    assert ".memo, .row" in js
+    assert "input[name=name]" in js
+    assert ".transcript, .text" in js
+    # The whole transcript, not the clipped preview: .textContent reads the entire note
+    # even where only three lines of it show. Matched case-insensitively as a substring,
+    # the way Ctrl+F reads.
+    assert "textContent" in js
+    assert "toLowerCase()" in js
+    assert "indexOf(term) >= 0" in js
+    # A missed row is display:none even though .memo/.row are display:contents, so the
+    # rule out-specifies them to put the display back.
+    rule = css.split(".grid .memo.find-miss")[1].split("}")[0]
+    assert ".grid .row.find-miss" in rule and ".grid .sep.find-miss" in rule
+    assert "display: none" in rule
+
+
+def test_find_keeps_the_separators_right_and_re_runs_as_the_list_changes(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "find.js")
+
+    # The line between rows is a separate element sitting before each row, so a hidden
+    # row would strand its line. The filter hides the separator above a missed row and
+    # the one above the first match, so exactly one line sits between any two matches and
+    # none leads the list.
+    assert "previousElementSibling" in js
+    assert "contains('sep')" in js
+    # The list changes under an open search — a recording the poll splices in, a merge
+    # that rebuilds every row — so the filter re-runs when it does. It toggles only
+    # classes, never the child list, so watching childList never trips on its own work.
+    assert "MutationObserver" in js
+    assert "childList: true" in js
+
+
+def test_find_tallies_the_matches_out_loud(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+    js = asset(client, "find.js")
+
+    # The bar says how much of the list it has narrowed to, announced for a screen reader
+    # as it changes.
+    assert 'id="find-tally"' in body
+    assert 'aria-live="polite"' in body
+    assert "' of '" in js  # "3 of 42"
+    assert "No matches" in js
+
+
+def test_find_closes_back_to_the_whole_list(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+    js = asset(client, "find.js")
+
+    # Closing clears the query, so the list you come back to is the whole one and not a
+    # filter left on and forgotten.
+    assert 'id="find-close"' in body
+    close = js.split("function close()")[1].split("}")[0]
+    assert "input.value = ''" in close
+    assert "bar.hidden = true" in close
+
+
+def test_find_is_the_one_script_both_pages_share_for_it(tmp_path):
+    # find.js loads on every page from the shared chrome, so a page can't carry the bar
+    # and forget the behaviour. The bin has no inbox.js and no undo stack, but it has this.
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    binned = client.get("/bin").data.decode()
+
+    assert "/static/find.js" in binned
+    assert "/static/inbox.js" not in binned
+    assert "/static/history.js" not in binned

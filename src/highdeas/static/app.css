@@ -97,6 +97,28 @@ body:has(#empty-bin:not(:disabled):hover) .row .purge:not(:disabled) { border-co
    this is the system working, shown so the note visibly exists somewhere
    during the seconds between the phone letting go and transcription finishing. */
 .transcribing { margin: 14px 0 0; font-size: .9rem; font-style: italic; opacity: .7; }
+/* The page's own find, in the frozen header so it stays in reach as the list scrolls.
+   Ctrl+F reveals it (find.js) and it filters the list to the matching rows; the browser's
+   own find can't, because it can't see the transcript the three-line preview clips off.
+   Hidden until it's called for. */
+.find { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.find[hidden] { display: none; }
+.find-input { flex: 1; min-width: 0; font: inherit; padding: 7px 10px;
+              border: 1px solid rgba(128,128,128,.4); border-radius: 8px;
+              background: transparent; color: inherit; }
+.find-input:focus { outline: none; border-color: #3b82f6; }
+/* How much of the list the search has narrowed to — "3 of 42". Tabular figures so the
+   count doesn't jitter sideways as it changes under the typing. */
+.find-tally { flex: none; font-size: .8rem; opacity: .6; font-variant-numeric: tabular-nums; }
+.find-close { flex: none; font: inherit; font-size: 1.4rem; line-height: 1; width: 32px; height: 32px;
+              border: none; border-radius: 8px; background: transparent; color: inherit;
+              opacity: .5; cursor: pointer; transition: opacity .15s; }
+.find-close:hover { opacity: 1; }
+/* A row the current search misses, and the separator stranded above a hidden row. Set on
+   the .memo and .row elements, which are display:contents, so the rule has to out-specify
+   that to take the display back to none. */
+.grid .memo.find-miss, .grid .row.find-miss, .grid .sep.find-miss { display: none; }
+
 /* Rows top-justify rather than center: a centered row re-centers whenever one cell
    grows, so the Asana dropdown appearing shoved the destination icons (and every
    neighbour) upward. Anchored to the top, a growing cell only extends downward. */

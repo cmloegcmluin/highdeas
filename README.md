@@ -27,7 +27,11 @@ recording, or a subtask on an Asana task.
    under), and Submit / Delete. Drag a row by its grip to reorder the list; the row rides
    under the cursor while you move it. A live item count and a frozen title bar + column
    headers (carrying **Submit all** / **Trash all**) stay in reach as the list scrolls.
-   Recordings that arrive while the page is open are polled in automatically.
+   Recordings that arrive while the page is open are polled in automatically. **Ctrl+F**
+   opens an in-page find in that frozen header: type and the list narrows to the notes
+   whose name or transcript holds it — reaching the whole transcript, the part the
+   three-line preview clips off included, which the browser's own find can't see — and
+   Esc brings the full list back. The bin carries the same find.
 5. **Group** — ideas arrive in clusters. Tick a few notes and press the group button above
    the checkboxes: they fold into one memo whose transcript is a bullet per note, in inbox
    order, a named note reading `- Name: transcript`. Tick an existing group and the rest
