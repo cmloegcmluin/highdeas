@@ -1,0 +1,26 @@
+name: merge gate
+run-name: gating
+
+# The gate the merge queue runs on the candidate merge (this branch onto the main it
+# will land on), and on the PR itself so a red branch never reaches the queue.
+on:
+    pull_request:
+    merge_group:
+
+jobs:
+    suite:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            # The real manifest, not a hand-picked subset of it. Both desks install this
+            # themselves on a pull that moves it (update.py), so a manifest that cannot
+            # install is a launch that dies on his desk — found here instead of there.
+            - name: Install what the manifest says the app needs
+              run: pip install -e ".[dev]"
+
+            - name: The suite
+              run: python -m pytest -q
