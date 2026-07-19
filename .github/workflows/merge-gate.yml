@@ -1,11 +1,11 @@
 name: merge gate
 run-name: gating
 
-# The gate the merge queue runs on the candidate merge (this branch onto the main it
-# will land on), and on the PR itself so a red branch never reaches the queue.
+# The gate every PR must pass before it may land. `main`'s ruleset requires this check
+# AND that the branch be up to date with `main`, so the run that gates a merge is a run
+# on this branch already rebased onto the `main` it lands on.
 on:
     pull_request:
-    merge_group:
 
 jobs:
     suite:
