@@ -422,7 +422,18 @@
     }).catch(function () { /* the clipboard wouldn't take it; the editor has no bar to say so */ });
   }
 
+  // showModal makes the page behind the dialog inert to clicks and keys, but not to
+  // sound. A row player left running kept playing under the modal, doubling the very
+  // recording the editor autoplays a beat behind it. Taking the page over means taking
+  // its sound too — every player but this one, which is about to start.
+  function hushPage() {
+    document.querySelectorAll('audio').forEach(function (el) {
+      if (el !== audio) el.pause();
+    });
+  }
+
   function open(note) {
+    hushPage();
     current = note;
     words = note.words || [];
     following = true;

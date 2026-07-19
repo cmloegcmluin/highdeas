@@ -1014,6 +1014,23 @@ def test_the_editor_autoplays_and_highlights_without_selecting(tmp_path):
     assert "::highlight(spoken)" in asset(client, "app.css")
 
 
+def test_opening_the_editor_hushes_the_players_left_running_behind_it(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    script = asset(client, "editor.js")
+    # showModal makes the page behind the dialog inert to clicks and keys, but not to
+    # sound: a row player left running kept going under the modal, doubling the very
+    # recording the editor autoplays a beat behind it. Opening pauses every other
+    # player on the page — every one but the editor's own, which is about to start.
+    hush = script.split("function hushPage")[1].split("\n  }")[0]
+    assert "document.querySelectorAll('audio')" in hush
+    assert "el !== audio" in hush
+    assert "el.pause()" in hush
+    # And it hushes before starting its own, or it would silence that too.
+    opening = script.split("function open(note)")[1].split("\n  }")[0]
+    assert opening.index("hushPage();") < opening.index("audio.play()")
+
+
 def test_the_editor_saves_on_the_way_out_rather_than_after_it_has_closed(tmp_path):
     client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
