@@ -101,9 +101,11 @@ recording, or a subtask on an Asana task.
    place it held.
 6. **Edit** — clicking a transcript opens the note in a near-fullscreen editor, so a rough
    transcription gets fixed here rather than shipped out half-finished. The recording sits
-   up top as a waveform and starts playing; each word turns the waveform's own yellow in
-   the text as it's spoken (its colour, never its selection, so your caret stays where you
-   left it and a picked word reads as yellow letters on blue). The waveform is
+   up top as a waveform and starts playing, and the text keeps pace with it: the waveform
+   is yellow behind its playhead and grey in front of it, and so is the transcript — the
+   words already said turn the same yellow, up to the one being said. It is their colour,
+   never their selection, so your caret stays where you left it and a word both said and
+   picked reads as yellow letters on blue. The waveform is
    divided into the words it spoke: a hairline where each one starts and the word itself
    printed underneath. Click a word to take its whole chunk of sound — the playhead lands
    at the top of it, so clicking plays from there — and shift-click another to reach it,

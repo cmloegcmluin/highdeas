@@ -237,8 +237,9 @@
   }
 
   // Walk the spoken words and the on-screen words together, letting the on-screen
-  // side skip ahead when the user has inserted text. An unmatched word simply gets
-  // no highlight; the word before it stays lit until the next match comes due.
+  // side skip ahead when the user has inserted text. An unmatched word is never what
+  // the colour reaches to; it is simply carried along by the word after it, which is
+  // where the playhead's edge in the text actually falls (see paint).
   function align() {
     var tokens = textTokens(bodyEl);
     var next = 0;
@@ -268,6 +269,12 @@
     return found < 0 ? null : marks[found];
   }
 
+  // Everything said so far, in the colour of the sound. The waveform is yellow behind the
+  // playhead and grey in front of it; the text is the same recording written down, so it
+  // says the same thing — the colour reaches from the top of the note to the end of the
+  // word being spoken, rather than lighting that one word and dropping the one before.
+  // Whatever sits between two spoken words is behind the playhead too, so it comes along:
+  // a word the transcript gained and the recording never had is still text already passed.
   function paint(seconds) {
     if (!highlight) return;
     var mark = spokenAt(seconds);
@@ -275,15 +282,18 @@
     painted = mark;
     highlight.clear();
     if (!mark || !mark.token.node.isConnected) return;
-    var range = document.createRange();
+    var word = document.createRange();
+    var said = document.createRange();
     try {
-      range.setStart(mark.token.node, mark.token.from);
-      range.setEnd(mark.token.node, mark.token.to);
+      word.setStart(mark.token.node, mark.token.from);
+      word.setEnd(mark.token.node, mark.token.to);
+      said.selectNodeContents(bodyEl);
+      said.setEnd(mark.token.node, mark.token.to);
     } catch (err) {
       return;  // the node was edited out from under us; the next align() fixes it
     }
-    highlight.add(range);
-    if (following) reveal(range);
+    highlight.add(said);
+    if (following) reveal(word);  // the word being said, not the whole of what has been
   }
 
   function reveal(range) {

@@ -1264,6 +1264,18 @@ def test_the_waveform_is_divided_into_the_words_it_spoke_and_chosen_by_them(tmp_
     assert "function drawChunks" in script
 
 
+def test_the_text_yellows_everything_said_so_far_not_just_the_word_in_hand(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    painting = asset(client, "editor.js").split("function paint(seconds)")[1].split("\n  }")[0]
+    # The waveform is yellow behind the playhead and grey in front of it. The text says the
+    # same thing, so the colour reaches back to the top of the note rather than lighting one
+    # word and dropping the one before it.
+    assert "selectNodeContents(bodyEl)" in painting
+    # Scrolling still follows the word being said, not the whole of what has been.
+    assert "reveal(word)" in painting
+
+
 def test_picking_sound_and_picking_words_are_one_choice(tmp_path):
     client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 

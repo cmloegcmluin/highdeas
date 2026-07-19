@@ -448,14 +448,14 @@ body:has(#empty-bin:not(:disabled):hover) .row .purge:not(:disabled) { border-co
 .editor-body p { margin: 0 0 .55em; min-height: 1.45em; }
 .editor-body ul, .editor-body ol { margin: 0 0 .55em; padding-left: 1.6em; }
 .editor-body li { margin: 0 0 .2em; }
-/* The word being spoken right now, turning the colour of the sound rather than wearing a
-   wash behind it — the waveform's played stretch is yellow sound on the page, so the word
-   it is playing is yellow letters on it. Behind was worse than wrong: a word both spoken
-   and picked wore two washes, which mixed into a third colour meaning neither. A colour
-   and a background don't mix, they layer — yellow letters on blue, exactly as the
-   waveform reads. The CSS Custom Highlight API paints it without touching the DOM or the
-   selection, so it lights up without ever being selected, and the caret and any real
-   selection stay exactly where the user left them. */
+/* Everything said so far, turning the colour of the sound rather than wearing a wash
+   behind it — the waveform is yellow behind its playhead and grey in front of it, and the
+   text is the same recording written down, so it reads the same way. Behind was worse than
+   wrong: text both spoken and picked wore two washes, which mixed into a third colour
+   meaning neither. A colour and a background don't mix, they layer — yellow letters on
+   blue, exactly as the waveform reads. The CSS Custom Highlight API paints it without
+   touching the DOM or the selection, so it lights up without ever being selected, and the
+   caret and any real selection stay exactly where the user left them. */
 ::highlight(spoken) { color: var(--spoken); }
 /* Words picked in the transcript, in the same blue and the same wash as the chunks of
    waveform they were spoken over — one choice, shown in both places. The descendant rule
