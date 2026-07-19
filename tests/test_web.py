@@ -1943,6 +1943,22 @@ def test_bin_shows_destination_icon_instead_of_status_word(tmp_path):
     assert b"Sent to Google Drive" in body
 
 
+def test_bin_names_claude_as_where_a_claude_note_went(tmp_path):
+    # The destination cell reads the route, and everything it doesn't recognise falls
+    # through to Notesnook — so a note opened in Claude would claim to have been sent
+    # somewhere it never went.
+    service = FakeService(binned=[
+        Memo(audio_filename="c.m4a", status="processed", route="claude",
+             processed_at="2026-07-07T02:00"),
+    ])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/bin").data.decode()
+
+    assert "Opened in Claude" in body
+    assert "Sent to Notesnook" not in body
+
+
 def test_bin_names_no_destination_for_a_memo_that_was_never_sent(tmp_path):
     # The column answers one question: which of the three destinations took this memo. A
     # trashed note and one merged into a group were never sent anywhere, so the column

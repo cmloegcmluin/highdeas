@@ -30,7 +30,7 @@
 {% endblock %}
 
 {% block content %}
-  {% from "icons.html" import notesnook, drive, asana, restore, trash, kind_cell %}
+  {% from "icons.html" import notesnook, drive, asana, claude, restore, trash, kind_cell %}
   {% if not memos %}
   <p class="empty">Nothing in the bin. Submitted and deleted memos land here (kept for 90 days).</p>
   {% else %}
@@ -45,15 +45,17 @@
       <audio controls src="/bin-audio/{{ m.audio_filename }}"></audio>
       <div class="text">{{ m.transcript }}</div>
       <div class="name">{{ m.name or m.audio_filename }}</div>
-      {#- Which of the three destinations took the memo. A trashed note, and one merged
-          into a group, went to none of them and the column has nothing to say about
-          them — yet both still carry the route they were bound for, so the status is
-          read before the route or the bin claims they were sent. -#}
+      {#- Which destination took the memo. A trashed note, and one merged into a group,
+          went to none of them and the column has nothing to say about them — yet both
+          still carry the route they were bound for, so the status is read before the
+          route or the bin claims they were sent. Claude is named before the fallback:
+          it "sends" nothing, and an unrecognised route reads as Notesnook. -#}
       <div class="dest">
         {%- if m.status == 'processed' %}
         {%- if m.route == 'drive' %}<form method="post" action="/open-drive"><button class="destlink icon" type="submit" title="Sent to Google Drive — open in Drive" aria-label="Sent to Google Drive — open in Drive">{{ drive() }}</button></form>
         {%- elif m.route == 'asana' and m.asana_url %}<form method="post" action="/open-asana/{{ m.audio_filename }}"><button class="destlink icon" type="submit" title="Sent to Asana — open the task" aria-label="Sent to Asana — open the task">{{ asana() }}</button></form>
         {%- elif m.route == 'asana' %}<span class="icon" title="Sent to Asana" aria-label="Sent to Asana">{{ asana() }}</span>
+        {%- elif m.route == 'claude' %}<span class="icon" title="Opened in Claude" aria-label="Opened in Claude">{{ claude() }}</span>
         {%- else %}<span class="icon" title="Sent to Notesnook" aria-label="Sent to Notesnook">{{ notesnook() }}</span>
         {%- endif %}
         {%- endif %}</div>
