@@ -24,6 +24,12 @@
    and the stretch of waveform already played are the same sound, so they are the same
    yellow. editor.js reads it from here rather than keeping a second copy of it.
 
+   --picked is the colour of what is chosen, and the same reasoning: words picked in the
+   transcript and the chunks of waveform they were spoken over are one choice shown in two
+   places, so they are one blue. --picked-wash is how strongly it is laid on — a wash, so
+   the words under it stay read. editor.js reads both from here, so neither surface can
+   drift off the other.
+
    --preview is how tall a row's three-line transcript preview stands: three line boxes
    (1.45rem each) plus its 8px padding and 1px border top and bottom. It is the tallest
    thing in a row, so it is what a row's height comes to — which is why the outline of a
@@ -33,7 +39,7 @@
    outline sets its own smaller type, and in em its box came out 7px shorter than the row
    it was standing in for — the exact jump it exists to prevent. */
 :root { color-scheme: light dark; scrollbar-gutter: stable; --spoken: #facc15;
-        --preview: calc(3 * 1.45rem + 18px); }
+        --picked: #3b82f6; --picked-wash: 35%; --preview: calc(3 * 1.45rem + 18px); }
 body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; max-width: 1300px;
        margin: 0 auto; padding: 0 24px 24px; line-height: 1.45; }
 h1 { font-size: 1.35rem; margin: 0; }
@@ -447,6 +453,13 @@ body:has(#empty-bin:not(:disabled):hover) .row .purge:not(:disabled) { border-co
    the caret and any real selection stay exactly where the user left them. A wash of
    --spoken rather than the colour itself: it sits behind text that has to stay read. */
 ::highlight(spoken) { background-color: color-mix(in srgb, var(--spoken) 45%, transparent); }
+/* Words picked in the transcript, in the same blue and the same wash as the chunks of
+   waveform they were spoken over — one choice, shown in both places. The descendant rule
+   is the one that does the work: a note's text lives in <p> and <li>, not in the body
+   itself. A wash rather than the colour outright, so the words stay read; the canvas lays
+   the same --picked over the bars at the same strength (see drawWave). */
+.editor-body::selection, .editor-body ::selection {
+  background-color: color-mix(in srgb, var(--picked) var(--picked-wash), transparent); }
 
 .editor-foot { display: flex; justify-content: flex-end; }
 /* The one filled button left in the app. A dialog has a single way out of it, said once

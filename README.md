@@ -106,12 +106,15 @@ recording, or a subtask on an Asana task.
    divided into the words it spoke: a hairline where each one starts and the word itself
    printed underneath. Click a word to take its whole chunk of sound — the playhead lands
    at the top of it, so clicking plays from there — and shift-click another to reach it,
-   taking the run between. Space plays or pauses. Delete then cuts what you've taken out of
-   the recording itself and out of the transcript. It reads the other way round too: delete
-   words from the text and the sound they were spoken over goes with them. Either way what
-   plays and what it says stay the same note. (Only whole words deleted, and only deleted —
-   a letter taken out of a word, or a word typed over, is a correction and costs the
-   recording nothing.)
+   taking the run between. What you take on the waveform is selected in the transcript
+   below, and what you select in the transcript lights the chunks its words were spoken
+   over (the ones it holds whole), in the same blue either way: one choice, shown in both
+   places. Space plays or pauses. Delete then cuts what you've taken out of the recording
+   itself and out of the transcript. It reads the other way round too: delete words from
+   the text and the sound they were spoken over goes with them. Either way what plays and
+   what it says stay the same note. (Only whole words deleted, and only deleted — a letter
+   taken out of a word, or a word typed over, is a correction and costs the recording
+   nothing.)
    The title has room to be read whole, and the body takes bulleted and numbered lists:
    each button turns its list on over what you've selected, and off again when you press it
    over that same list. Edits auto-save, and the words re-match to the text as you change
