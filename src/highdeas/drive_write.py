@@ -56,3 +56,100 @@ def _user_access_token(token_file, *, credentials_cls=Credentials):
     credentials = credentials_cls.from_authorized_user_file(token_file, scopes=[TOKEN_SCOPE])
     credentials.refresh(Request())
     return credentials.token
+
+
+_DOC_MIME_TYPE = "application/vnd.google-apps.document"
+_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+# Arbitrary but fixed: it only has to not appear inside the parts it separates,
+# and neither JSON metadata nor a memo's own HTML ever will.
+_BOUNDARY = "----highdeas-drive-write-boundary"
+
+
+def _multipart_related_body(parts):
+    """The multipart/related body (RFC 2387) Drive's own "multipart upload"
+    protocol expects for files.create -- one part per (content, content_type)
+    pair, metadata first -- and the Content-Type header (boundary included) to
+    send alongside it. Built by hand rather than left to requests' own
+    multipart support: that builds multipart/form-data (an HTML file input's
+    format), a different wire shape than the multipart/related Drive's own
+    examples show, and this way what's sent is exactly that, byte for byte."""
+    pieces = [f"--{_BOUNDARY}\r\nContent-Type: {content_type}\r\n\r\n{content}"
+              for content, content_type in parts]
+    body = "\r\n".join(pieces) + f"\r\n--{_BOUNDARY}--"
+    return body, f"multipart/related; boundary={_BOUNDARY}"
+
+
+class DriveDocFiler:
+    """Files a memo's transcript into Google Drive as a real, native Google Doc,
+    inside `container_name`/<dated subfolder> -- both created the first time
+    they're needed and reused after (see the module docstring for why this
+    can only ever be a folder tree of its own, never HIGHDEAS_DRIVE_BASE)."""
+
+    def __init__(self, token_file, container_name, *, get=requests.get, post=requests.post,
+                 token=_user_access_token):
+        self._token_file = token_file
+        self._container_name = container_name
+        self._get = get
+        self._post = post
+        self._token = token
+
+    def _folder_id(self, headers, name, parent_id):
+        """The id of the folder named `name` directly inside `parent_id`
+        ("root" for Drive's own top level) -- the one already there, or one
+        just created, so every caller gets back a folder that exists either
+        way."""
+        query = (
+            f"name = '{_escaped(name)}' and "
+            f"mimeType = '{_FOLDER_MIME_TYPE}' and "
+            f"'{parent_id or 'root'}' in parents and "
+            "trashed = false"
+        )
+        response = self._get(_FILES_ENDPOINT, headers=headers,
+                             params={"q": query, "fields": "files(id)"}, timeout=10)
+        response.raise_for_status()
+        files = response.json().get("files", [])
+        if files:
+            return files[0]["id"]
+        metadata = {"name": name, "mimeType": _FOLDER_MIME_TYPE}
+        if parent_id:
+            metadata["parents"] = [parent_id]
+        response = self._post(_FILES_ENDPOINT, headers=headers, json=metadata,
+                              params={"fields": "id"}, timeout=10)
+        response.raise_for_status()
+        return response.json()["id"]
+
+    def file_doc(self, subfolder_name, title, html):
+        """Create `title` as a native Google Doc holding `html`, inside
+        container_name/subfolder_name. Returns the doc's own Drive link, or ""
+        when it can't be filed at all: not configured, the token can't be
+        obtained, or any call along the way fails -- the same fall-back-quiet
+        contract as DriveFolderLinker.link_for, so a Drive hiccup degrades to
+        the docx-in-a-local-folder fallback (routers.DriveMusicRouter) rather
+        than losing the memo's routing."""
+        if not self._token_file or not subfolder_name or not title:
+            return ""
+        try:
+            access_token = self._token(self._token_file)
+        except Exception:  # noqa: BLE001 — a missing/invalid/revoked token must fall back quietly
+            return ""
+        if not access_token:
+            return ""
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            container_id = self._folder_id(headers, self._container_name, "")
+            subfolder_id = self._folder_id(headers, subfolder_name, container_id)
+            metadata = {"name": title, "mimeType": _DOC_MIME_TYPE, "parents": [subfolder_id]}
+            body, content_type = _multipart_related_body(
+                ((json.dumps(metadata), "application/json"), (html, "text/html; charset=UTF-8")))
+            response = self._post(
+                _UPLOAD_ENDPOINT,
+                headers={**headers, "Content-Type": content_type},
+                params={"uploadType": "multipart", "fields": "id"},
+                data=body,
+                timeout=30,
+            )
+            response.raise_for_status()
+            doc_id = response.json()["id"]
+        except Exception:  # noqa: BLE001 — offline/misconfigured/revoked must fall back quietly, not 500
+            return ""
+        return f"https://docs.google.com/document/d/{doc_id}/edit"
