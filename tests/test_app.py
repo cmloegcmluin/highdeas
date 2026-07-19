@@ -413,7 +413,15 @@ def test_build_app_reads_blank_claude_settings_as_unset(tmp_path, monkeypatch):
 def test_build_app_reads_every_folder_from_the_environment(tmp_path, monkeypatch):
     inbox, bin_dir, drive = tmp_path / "inbox", tmp_path / "bin", tmp_path / "drive"
     inbox.mkdir()
-    monkeypatch.delenv("HIGHDEAS_STATE_DIR", raising=False)
+    # Not delenv: build_app() calls load_dotenv(), which repopulates any var that's
+    # genuinely absent from os.environ from this checkout's real .env — on a machine
+    # where HIGHDEAS_STATE_DIR is configured (as Douglas's now is), delenv here would
+    # silently point this test's store at his real state folder instead of tmp_path.
+    # An empty value already "present" blocks that: load_dotenv() never overrides a
+    # key that's already set, per its own override=False default (main.py: "if k in
+    # os.environ and not self.override: <skip>") — and "" already reads as unset to
+    # _build_store (`if not state_dir`), so the intended SQLite-mode behavior holds.
+    monkeypatch.setenv("HIGHDEAS_STATE_DIR", "")
     db_path = tmp_path / "memos.db"
     monkeypatch.setenv("HIGHDEAS_INBOX_DIR", str(inbox))
     monkeypatch.setenv("HIGHDEAS_BIN_DIR", str(bin_dir))
