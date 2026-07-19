@@ -224,6 +224,53 @@ def test_drive_link_resolver_wires_the_service_account_file_and_parent_id_into_t
     assert linker._parent_id == "PARENT_ID"
 
 
+def test_drive_doc_filer_is_none_without_a_token_file_configured(monkeypatch):
+    import highdeas.app as app_mod
+    monkeypatch.delenv("HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE", raising=False)
+
+    assert app_mod._drive_doc_filer() is None
+
+
+def test_drive_doc_filer_wires_up_when_a_token_file_is_configured(monkeypatch, tmp_path):
+    import highdeas.app as app_mod
+    monkeypatch.setenv("HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE", str(tmp_path / "token.json"))
+
+    filer = app_mod._drive_doc_filer()
+
+    assert callable(filer)
+
+
+def test_drive_doc_filer_wires_the_token_file_and_default_container_name_into_the_filer(
+        monkeypatch, tmp_path):
+    # Not just "truthy": the resolver's underlying DriveDocFiler must be pointed at the
+    # exact token file HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE names, and (unset) the
+    # documented default container -- not swapped, not blank. (DriveDocFiler's own
+    # filing logic, including its Drive API calls, is covered independently in
+    # test_drive_write.py -- its get/post/token constructor seams are where that's
+    # mocked, since the defaults this resolver leaves in place are bound once at
+    # import time and can't be swapped back out from here.)
+    import highdeas.app as app_mod
+    monkeypatch.delenv("HIGHDEAS_DRIVE_DOCS_FOLDER_NAME", raising=False)
+    token_file = tmp_path / "token.json"
+    monkeypatch.setenv("HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE", str(token_file))
+
+    filer = app_mod._drive_doc_filer()
+
+    doc_filer = filer.__self__
+    assert doc_filer._token_file == str(token_file)
+    assert doc_filer._container_name == "Highdeas Voice Memo Docs"
+
+
+def test_drive_doc_filer_uses_a_configured_container_name(monkeypatch, tmp_path):
+    import highdeas.app as app_mod
+    monkeypatch.setenv("HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE", str(tmp_path / "token.json"))
+    monkeypatch.setenv("HIGHDEAS_DRIVE_DOCS_FOLDER_NAME", "Voice Memo Transcripts")
+
+    filer = app_mod._drive_doc_filer()
+
+    assert filer.__self__._container_name == "Voice Memo Transcripts"
+
+
 def test_default_bin_dir_sits_beside_the_inbox(tmp_path):
     # The bin must live in the same parent folder as the inbox, so retiring a
     # recording (inbox -> bin) moves it *within* the same iCloud tree. Moving a

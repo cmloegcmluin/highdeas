@@ -12,6 +12,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from highdeas.drive_link import DriveFolderLinker, parent_id_from_folder_url
+from highdeas.drive_write import DriveDocFiler
 from highdeas.routers import (
     AsanaRouter, ClaudeRouter, DriveMusicRouter, NotesnookRouter, Router, parse_choices,
     read_asana_tokens,
@@ -289,6 +290,28 @@ def _deep_link_launcher():
     if sys.platform == "darwin":
         return lambda url: subprocess.Popen(["open", url])
     return os.startfile
+
+
+# The folder DriveDocFiler files native Google Docs into when
+# HIGHDEAS_DRIVE_DOCS_FOLDER_NAME doesn't say otherwise. Never HIGHDEAS_DRIVE_BASE's
+# name -- see drive_write.py's module docstring for why that has to be a folder tree
+# of its own.
+_DEFAULT_DRIVE_DOCS_FOLDER_NAME = "Highdeas Voice Memo Docs"
+
+
+def _drive_doc_filer():
+    """A callable that files a memo's transcript as a real, native Google Doc via the
+    real Drive API, authenticated as Douglas's own account -- or None when that isn't
+    configured (no HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE, which scripts/authorize_google_docs.py
+    writes). DriveMusicRouter falls back to its own local .docx write whenever this is
+    None or the call resolves to nothing, so native-Doc filing stays opt-in, not
+    required -- a machine that hasn't run the one-time authorization yet still files
+    memos exactly as it always has."""
+    token_file = os.environ.get("HIGHDEAS_GOOGLE_DOCS_TOKEN_FILE", "")
+    if not token_file:
+        return None
+    container_name = os.environ.get("HIGHDEAS_DRIVE_DOCS_FOLDER_NAME") or _DEFAULT_DRIVE_DOCS_FOLDER_NAME
+    return DriveDocFiler(token_file, container_name).file_doc
 
 
 def _drive_link_resolver(folder_url):
