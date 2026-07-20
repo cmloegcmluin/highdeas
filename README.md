@@ -83,6 +83,9 @@ recording, or a subtask on an Asana task.
    what a recording left running by accident is caught by: forty minutes on the player's
    clock says what it is long before a word of it has been read, and the bin drops it —
    into the bin like anything else, restorable — without the model spending itself on it.
+   Beside the player, the place the transcript will go fills up as the model reads: a
+   percentage and a bar, counting the seconds of the recording actually heard rather than
+   guessing at the clock, so a long one is visibly working rather than visibly hung.
 
    A **find** box sits in the title bar between the count and the buttons — its magnifier
    there from the start, **Ctrl+F** just putting the cursor in it: type and the list

@@ -12,7 +12,7 @@ from highdeas.transcribe import TimedWord, Transcript
 
 
 class FakeTranscriber:
-    def transcribe(self, path):
+    def transcribe(self, path, progress=None):
         return Transcript(f"text for {Path(path).name}")
 
 
@@ -93,7 +93,7 @@ def test_refresh_stores_when_each_word_was_spoken_alongside_the_transcript(tmp_p
     store = MemoStore(tmp_path / "memos.db")
 
     class TimingTranscriber:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             return Transcript("I need a dusting.", (
                 TimedWord(0.96, "I"), TimedWord(1.52, "need"),
                 TimedWord(2.08, "a"), TimedWord(2.32, "dusting."),
@@ -129,7 +129,7 @@ def test_refresh_isolates_a_failing_recording_so_the_rest_still_ingest(tmp_path)
         ]
 
     class PickyTranscriber:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             if Path(path).name.startswith("bad"):
                 raise RuntimeError("cannot decode a half-downloaded file")
             return Transcript("a good idea")
@@ -524,7 +524,7 @@ def test_concurrent_refreshes_transcribe_each_recording_once(tmp_path):
         def __init__(self):
             self.calls = 0
 
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             self.calls += 1
             inside.set()
             release.wait(timeout=2)
@@ -576,6 +576,42 @@ def test_incoming_is_empty_when_the_inbox_is_drained(tmp_path):
     assert service.incoming() == []
 
 
+def test_incoming_says_how_far_the_scan_has_got_through_what_it_is_reading(tmp_path):
+    # Which of the waiting recordings the model is on, and how much of it it has heard —
+    # the only thing about a recording being transcribed that can honestly carry a number.
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"A")
+    key = recording_key(inbox / "voice.m4a")
+    store = MemoStore(tmp_path / "memos.db")
+    midway = []
+
+    class ReportsHalfway:
+        def transcribe(self, path, progress=None):
+            progress(0.5)
+            midway.append([(r.name, r.progress) for r in service.incoming()])
+            return Transcript("heard")
+
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=ReportsHalfway(),
+                           bin_dir=tmp_path / "bin")
+
+    service.refresh()
+
+    assert midway == [[(key, 0.5)]]
+    assert service.incoming() == []  # and nothing is left behind claiming to be read
+
+
+def test_a_recording_no_one_has_started_reading_reports_no_progress(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"A")
+    store = MemoStore(tmp_path / "memos.db")
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=FakeTranscriber(),
+                           bin_dir=tmp_path / "bin")
+
+    assert [r.progress for r in service.incoming()] == [0.0]
+
+
 def test_discard_bins_a_recording_before_it_is_ever_transcribed(tmp_path):
     # A recording left running by accident is recognisable from its audio alone, so its
     # row can be emptied before the model spends itself reading forty minutes of nothing.
@@ -613,7 +649,7 @@ def test_a_recording_thrown_away_mid_transcription_stays_thrown_away(tmp_path):
     store = MemoStore(tmp_path / "memos.db")
 
     class ThrownAwayMidway:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             service.discard(key)
             return Transcript("forty minutes of nothing")
 
@@ -638,7 +674,7 @@ def test_the_scan_leaves_a_memo_that_settled_while_it_was_reading(tmp_path):
     store = MemoStore(tmp_path / "memos.db")
 
     class SettledMidway:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             store.upsert(Memo(audio_filename=key, transcript="as somebody else settled it",
                               status="pending"))
             return Transcript("what the model heard")
@@ -1193,7 +1229,7 @@ def test_refresh_can_wait_for_the_running_scan_instead_of_skipping(tmp_path):
     release = threading.Event()
 
     class SlowTranscriber:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             scanning.set()
             release.wait(timeout=5)
             return Transcript(f"text for {Path(path).name}")

@@ -25,13 +25,19 @@
       fill, since nothing else about the note is known yet. It plays from the name the
       recording landed under; the row it becomes plays from the key, which is why the
       two are carried separately and why the bin posts the key. -#}
+  {#- How far the model has got through this one, said and drawn: a long recording takes
+      minutes to read, and an outline that only ever says "Transcribing…" through them
+      reads the same as one that has hung. Nothing until there is something — warming the
+      model and decoding come before the first piece is read, and a bar pinned at nought
+      through that reads as stuck where the breathing box already reads as working. -#}
   {% for r in incoming %}
+  {% set done = (r.progress * 100) | round | int %}
   {% if not loop.first %}<div class="sep"></div>{% endif %}
   <div class="transcribing" data-file="{{ r.name }}">
     <div></div>
     <div class="transcribing-mark short"></div>
     <audio controls src="{{ url_for('audio', filename=r.source) }}"></audio>
-    <div class="transcribing-note">Transcribing…</div>
+    <div class="transcribing-note"{% if done %} style="--done: {{ done }}%"{% endif %}><span>Transcribing…{% if done %} {{ done }}%{% endif %}</span></div>
     <div></div>
     <div class="transcribing-mark"></div>
     <div class="transcribing-mark short"></div>

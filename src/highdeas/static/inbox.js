@@ -916,7 +916,17 @@
     });
     var changed = false;
     outlines().forEach(function (el) {
-      if (arriving[el.dataset.file]) { delete arriving[el.dataset.file]; return; }
+      var next = arriving[el.dataset.file];
+      if (next) {
+        delete arriving[el.dataset.file];
+        // The one thing that moves while an outline stands is how far the reading of it
+        // has got, so that cell alone is taken from the server's — never the whole row,
+        // which is what would take the player with it. The list itself is unchanged.
+        var note = el.querySelector('.transcribing-note');
+        var told = next.querySelector('.transcribing-note');
+        if (note && told && told.outerHTML !== note.outerHTML) note.replaceWith(told);
+        return;
+      }
       el.remove();
       changed = true;
     });

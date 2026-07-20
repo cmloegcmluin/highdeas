@@ -69,7 +69,7 @@ class FakeModel:
         self.recognized = []
         self.rates = []
 
-    def recognize(self, waveform, sample_rate=None):
+    def recognize(self, waveform, sample_rate=None, progress=None):
         self.recognized.append(waveform)
         self.rates.append(sample_rate)
         return self.results[min(len(self.recognized), len(self.results)) - 1]
@@ -115,6 +115,33 @@ def test_a_piece_ends_on_a_pause_rather_than_through_a_word(tmp_path):
     assert pause.start <= len(model.recognized[0]) <= pause.stop
 
 
+def test_it_says_how_much_of_a_recording_it_has_heard_as_it_goes(tmp_path):
+    # A long recording is a minute of nothing visibly happening, so the row standing in
+    # for it says how far along it is. This is what it counts, and it is a real count
+    # rather than a guess at the clock: the recording heard, a piece at a time.
+    rate = 100
+    long = int(HEARABLE_SECONDS * 2.5) * rate
+    model = FakeModel(Recognition("said"))
+    reported = []
+
+    HearsAnyLength(model).recognize(_wav(tmp_path / "long.wav", [0] * long, rate),
+                                    progress=reported.append)
+
+    assert len(reported) == len(model.recognized) > 1  # once per piece
+    assert reported == sorted(reported)  # never backwards
+    assert reported[-1] == pytest.approx(1.0)  # and finishes at the end of the recording
+
+
+def test_a_recording_heard_in_one_go_says_so_once_it_is_read(tmp_path):
+    model = FakeModel(Recognition("said"))
+    reported = []
+
+    HearsAnyLength(model).recognize(_wav(tmp_path / "short.wav", [0] * 200),
+                                    progress=reported.append)
+
+    assert reported == [pytest.approx(1.0)]
+
+
 def test_the_pieces_are_put_back_together_with_their_timings_slid_into_place(tmp_path):
     # Each piece is timed from its own start; the note has to be timed from the
     # recording's, or the editor lights up the wrong word once the audio runs past
@@ -150,6 +177,23 @@ def test_transcriber_decodes_then_recognizes(tmp_path):
     assert spoken.text == "hello world"
     assert decoded_calls == [tmp_path / "voice.m4a"]
     assert model.recognized == [decoded]
+
+
+def test_transcriber_hands_the_progress_report_down_to_where_it_can_be_counted(tmp_path):
+    # The row showing it watches the scan, which watches the transcriber; the count can
+    # only be made where the pieces are, so the way to it has to run all the way down.
+    reported = []
+
+    class Ears:
+        def recognize(self, wav, progress=None):
+            progress(0.5)
+            return Recognition("said")
+
+    spoken = Transcriber(model=Ears(), decode=lambda src: tmp_path / "x.wav").transcribe(
+        tmp_path / "a.m4a", progress=reported.append)
+
+    assert reported == [0.5]
+    assert spoken.text == "said"
 
 
 def test_transcriber_lazy_loads_model_once(tmp_path):

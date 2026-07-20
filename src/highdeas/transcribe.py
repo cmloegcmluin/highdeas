@@ -109,15 +109,23 @@ class HearsAnyLength:
 
     Past `HEARABLE_SECONDS` the model refuses a recording rather than shortening its
     answer, so a long one is heard in pieces and the pieces put back together — each
-    piece's word timings slid to where in the recording that piece starts."""
+    piece's word timings slid to where in the recording that piece starts.
+
+    Hearing one in pieces is also the only honest place to count how far along it is,
+    which is what `progress` is called with after each: the fraction of the recording
+    read so far, so the page has a real number to show rather than a guess at the
+    clock. A recording that fits says so once, when it is read."""
 
     def __init__(self, model):
         self._model = model
 
-    def recognize(self, wav):
+    def recognize(self, wav, progress=None):
         samples, rate = _read_wav(wav)
-        heard = [(at, self._model.recognize(piece, sample_rate=rate))
-                 for at, piece in _pieces(samples, rate)]
+        heard = []
+        for at, piece in _pieces(samples, rate):
+            heard.append((at, self._model.recognize(piece, sample_rate=rate)))
+            if progress is not None:
+                progress((at * rate + len(piece)) / len(samples))
         return Recognition(
             text=" ".join(said.text for _, said in heard if said.text),
             tokens=tuple(token for _, said in heard for token in said.tokens or ()),
@@ -236,9 +244,9 @@ class Transcriber:
             self._model = self._model_loader(self._model_name)
         return self._model
 
-    def transcribe(self, audio_path):
+    def transcribe(self, audio_path, progress=None):
         wav = self._decode(audio_path)
-        recognized = self._get_model().recognize(wav)
+        recognized = self._get_model().recognize(wav, progress=progress)
         # He says "um" and "uh" while he thinks and the model writes both down. They go
         # first, so that a note that was nothing else is left empty for the next step
         # to read as [unclear].

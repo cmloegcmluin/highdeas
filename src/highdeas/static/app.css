@@ -148,7 +148,16 @@ body:has(#empty-bin:not(:disabled):hover) .row .purge:not(:disabled) { border-co
 .transcribing-note, .transcribing-mark { border-radius: 8px; background: rgba(128,128,128,.14);
                                          animation: breathe 2s ease-in-out infinite; }
 .transcribing-note { box-sizing: border-box; height: var(--preview); padding: 8px;
-                     font-size: .9rem; font-style: italic; opacity: .75; }
+                     font-size: .9rem; font-style: italic; opacity: .75;
+                     position: relative; overflow: hidden; }
+/* How much of the recording the model has read, filled left to right behind the word it
+   says beside it. Set on the box as a percentage the server renders, and absent until
+   there is progress to draw — so the fill starts where the first piece finishes rather
+   than sitting at nought through the model's warm-up. The word rides above it. */
+.transcribing-note::before { content: ""; position: absolute; inset: 0 auto 0 0;
+                             width: var(--done, 0); background: rgba(59,130,246,.3);
+                             transition: width .5s ease-out; }
+.transcribing-note > span { position: relative; }
 .transcribing-mark { height: 34px; }
 .transcribing-mark.short { height: 12px; margin-top: 6px; }
 /* The page's own find: a search box in the title bar, centred between the count and the

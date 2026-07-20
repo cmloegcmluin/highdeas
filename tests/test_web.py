@@ -1587,6 +1587,33 @@ def test_discard_throws_away_a_recording_that_never_became_a_memo(tmp_path):
     assert service.discarded == ["voice-key.m4a"]
 
 
+def test_an_outline_says_how_far_the_reading_of_it_has_got(tmp_path):
+    # Forty minutes takes the model minutes to read, and an outline that only ever says
+    # "Transcribing…" through them is indistinguishable from one that has hung. The
+    # number is real — the recording heard, a piece at a time — and the same number
+    # fills the box it sits in.
+    service = FakeService(incoming=[Incoming(name="a.m4a", source="a.m4a", progress=0.41)])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert "Transcribing… 41%" in body
+    assert "--done: 41%" in body
+
+
+def test_an_outline_claims_no_progress_before_there_is_any_to_claim(tmp_path):
+    # Warming the model costs fifteen seconds on a cold start and the decode a few more,
+    # all before the first piece is read. A bar pinned at nought through that reads as
+    # stuck, where the breathing box already reads as working.
+    service = FakeService(incoming=[_landed("a.m4a")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    body = client.get("/").data.decode()
+
+    assert "Transcribing…" in body
+    assert "--done" not in body
+
+
 def test_an_outline_survives_the_poll_it_is_being_listened_to_through(tmp_path):
     client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
@@ -1598,7 +1625,12 @@ def test_an_outline_survives_the_poll_it_is_being_listened_to_through(tmp_path):
     # that became a memo goes, one that just landed joins, and the rest are left alone.
     reconcile = js.split("function mergeOutlines")[1].split("\n  }")[0]
     assert "dataset.file" in reconcile
-    assert "replaceWith" not in reconcile
+    # The one cell that changes while an outline stands is the one saying how far the
+    # reading has got, so that is the only cell the poll swaps. The player beside it is
+    # the reason the row is there and is never touched.
+    assert reconcile.count("replaceWith") == 1
+    assert "'.transcribing-note'" in reconcile
+    assert "audio" not in reconcile
 
 
 def test_the_bin_on_an_outline_throws_the_recording_away_before_it_is_read(tmp_path):
@@ -1750,7 +1782,7 @@ def test_pending_surfaces_a_recording_once_the_background_scan_takes_it_in(tmp_p
     bin_dir = tmp_path / "bin"
 
     class StubTranscriber:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             return Transcript("fresh idea")
 
     service = InboxService(
@@ -1971,7 +2003,7 @@ def test_submit_that_fails_to_route_keeps_the_memo_and_signals_the_client(tmp_pa
     store.upsert(Memo(audio_filename="a.m4a", status="pending", transcript="precious idea"))
 
     class StubTranscriber:
-        def transcribe(self, path):
+        def transcribe(self, path, progress=None):
             return Transcript("")
 
     def failing_route(memo):

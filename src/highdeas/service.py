@@ -36,9 +36,14 @@ class Incoming:
     """A recording in the inbox that isn't a memo yet, as the row standing in its place
     needs it: `source` is the file to play it from, still under the name it landed with,
     and `name` is the content key it will be stored under — the name its bin has to give
-    when a recording is recognised as an accident and dropped before the model reads it."""
+    when a recording is recognised as an accident and dropped before the model reads it.
+
+    `progress` is how much of it the model has heard, 0 until the scan reaches it: a long
+    recording is a minute of nothing visibly happening, and this is the number that says
+    otherwise."""
     name: str
     source: str
+    progress: float = 0.0
 
 
 def _no_router(memo):
@@ -157,6 +162,11 @@ class InboxService:
         # and the per-name count of scans waited so far.
         self._sync_settle_scans = sync_settle_scans
         self._deferred_scans = {}
+        # The recording the scan is reading and how much of it it has heard. One slot
+        # rather than a tally per file, because the refresh lock means one recording is
+        # ever being read; and a plain tuple, swapped whole, so the poll thread reading
+        # it can only ever see one scan's pair of answers, never half of two.
+        self._reading = ("", 0.0)
 
     def refresh(self, wait=False, adopt_now=None):
         """Ingest and transcribe any waiting recordings, skipping when a refresh is
@@ -218,7 +228,7 @@ class InboxService:
                 continue
             try:
                 adopted = self._adopt(recording)
-                spoken = self._transcriber.transcribe(adopted)
+                spoken = self._transcriber.transcribe(adopted, progress=self._reads(recording))
                 # Transcription is slow, and the store can gain a memo for this very
                 # recording while it runs — the row emptied by hand (see discard), or
                 # the other desk's memo syncing in. What the scan is holding is then
@@ -239,6 +249,8 @@ class InboxService:
                 # decoded. Skip it and press on; the next refresh retries it (its content
                 # key still isn't in the store, so nothing is lost).
                 print(f"Highdeas: skipping {recording.name} this pass ({exc}).")
+            finally:
+                self._reading = ("", 0.0)
         # A stranger whose state file arrived stops being offered by find_new;
         # its wait-count would otherwise linger forever.
         self._deferred_scans = {name: count for name, count in self._deferred_scans.items()
@@ -253,13 +265,23 @@ class InboxService:
         recording is confirmed instead of landing as an orphan file."""
         return audio_filename in self._store.known_filenames()
 
+    def _reads(self, recording):
+        """The callback the transcriber tells how much of this recording it has heard."""
+        def heard(done):
+            self._reading = (recording.name, done)
+
+        self._reading = (recording.name, 0.0)
+        return heard
+
     def incoming(self):
         """The recordings sitting in the inbox but not yet in the store, so the page can
         show them as "transcribing" the moment they land: the handoff from the phone's
         list to this one must never pass through "nowhere". A cheap directory scan — no
         model, no decoding, and nothing pulled down from iCloud — so it's safe on the
         request path."""
-        return [Incoming(name=recording.name, source=Path(recording.source).name)
+        reading, done = self._reading
+        return [Incoming(name=recording.name, source=Path(recording.source).name,
+                         progress=done if recording.name == reading else 0.0)
                 for recording in self._find_new(self._inbox_dir,
                                                 self._store.known_filenames())]
 
