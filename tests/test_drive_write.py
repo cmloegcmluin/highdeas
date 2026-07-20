@@ -148,3 +148,119 @@ def test_file_doc_blank_when_the_token_cant_be_obtained_due_to_an_error():
 
     filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", token=blowing_up)
     assert filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Title", "<p>hi</p>") == ""
+
+
+def test_file_doc_moves_the_doc_beside_the_audio_when_the_folder_can_be_found():
+    # Confirmed against the real Drive API (not assumed from scope docs): a
+    # files.update addParents/removeParents call succeeds for a folder the app
+    # never created, even though a drive.file-scoped files.get on that same
+    # folder id 404s -- see drive_write.py's module docstring.
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+    patch = FakeCalls(FakeResponse(body={"id": "DOC_ID"}))
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post, patch=patch,
+                          token=lambda f: "tok-123", find_folder_id=lambda name: "AUDIO_FOLDER_ID")
+
+    link = filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert link == "https://docs.google.com/document/d/DOC_ID/edit"  # unaffected by the move
+    assert len(patch.calls) == 1
+    url, kwargs = patch.calls[0]
+    assert url == "https://www.googleapis.com/drive/v3/files/DOC_ID"
+    assert kwargs["headers"]["Authorization"] == "Bearer tok-123"
+    assert kwargs["params"] == {"addParents": "AUDIO_FOLDER_ID", "removeParents": "SUBFOLDER_ID",
+                                "fields": "id"}
+
+
+def test_file_doc_asks_the_resolver_for_the_subfolder_name_not_the_title():
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+    patch = FakeCalls(FakeResponse(body={"id": "DOC_ID"}))
+    resolver_calls = []
+
+    def find_folder_id(name):
+        resolver_calls.append(name)
+        return "AUDIO_ID"
+
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post, patch=patch,
+                          token=lambda f: "tok", find_folder_id=find_folder_id)
+
+    filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert resolver_calls == ["_2026_07_17_NOT_YET_PROCESSED_MUSIC"]
+
+
+def test_file_doc_skips_the_move_when_no_resolver_is_given():
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+    patch = FakeCalls()
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post, patch=patch,
+                          token=lambda f: "tok")  # find_folder_id defaults to None
+
+    link = filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert link == "https://docs.google.com/document/d/DOC_ID/edit"
+    assert patch.calls == []
+
+
+def test_file_doc_skips_the_move_when_the_resolver_finds_nothing():
+    # Not configured, or (likely for the very first music memo of a new day) the
+    # audio's local folder hasn't synced up to Drive's cloud yet -- either way
+    # the doc stays right where it was already filed, in its own container.
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+    patch = FakeCalls()
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post, patch=patch,
+                          token=lambda f: "tok", find_folder_id=lambda name: "")
+
+    link = filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert link == "https://docs.google.com/document/d/DOC_ID/edit"
+    assert patch.calls == []
+
+
+def test_file_doc_skips_the_move_when_the_target_is_already_the_current_folder():
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+    patch = FakeCalls()
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post, patch=patch,
+                          token=lambda f: "tok", find_folder_id=lambda name: "SUBFOLDER_ID")
+
+    filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert patch.calls == []
+
+
+def test_file_doc_still_returns_the_link_when_the_move_itself_fails():
+    # The doc file_doc already filed, and the link already returned for it,
+    # must stand regardless of what happens after -- a failed move must not
+    # turn a successful filing into "" and trigger the .docx fallback on top
+    # of a native Doc that genuinely exists (just not yet beside the audio).
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+
+    def blowing_up_patch(*args, **kwargs):
+        raise ConnectionError("offline")
+
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post,
+                          patch=blowing_up_patch, token=lambda f: "tok",
+                          find_folder_id=lambda name: "AUDIO_FOLDER_ID")
+
+    link = filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert link == "https://docs.google.com/document/d/DOC_ID/edit"
+
+
+def test_file_doc_still_returns_the_link_when_resolving_the_target_folder_raises():
+    get = FakeCalls(_found("CONTAINER_ID"), _found("SUBFOLDER_ID"))
+    post = FakeCalls(_created("DOC_ID"))
+
+    def blowing_up_resolver(name):
+        raise ConnectionError("offline")
+
+    filer = DriveDocFiler("token.json", "Highdeas Voice Memo Docs", get=get, post=post,
+                          token=lambda f: "tok", find_folder_id=blowing_up_resolver)
+
+    link = filer.file_doc("_2026_07_17_NOT_YET_PROCESSED_MUSIC", "Korok Dance", "<p>la la la</p>")
+
+    assert link == "https://docs.google.com/document/d/DOC_ID/edit"
