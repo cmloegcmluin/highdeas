@@ -176,6 +176,18 @@ class InboxService:
         # it can only ever see one scan's pair of answers, never half of two.
         self._reading = ("", 0.0)
 
+    @property
+    def store(self):
+        """The store backing this service, for a caller that needs to act on it
+        directly rather than through a purpose-built method here -- app.py's own
+        DriveDocReconciler, chiefly, which needs exactly the list_retired()/
+        update() a store already offers, the same way scripts/backfill_drive_
+        subfolders.py talks to one with no InboxService in front of it at all.
+        Sharing this instance (rather than opening a second connection onto the
+        same db_path/state_dir) keeps every write behind the one lock a store
+        already guards itself with."""
+        return self._store
+
     def refresh(self, wait=False, adopt_now=None):
         """Ingest and transcribe any waiting recordings, skipping when a refresh is
         already running. The app's own scan, the client poll, and a second browser

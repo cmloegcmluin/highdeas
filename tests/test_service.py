@@ -1247,6 +1247,20 @@ def test_knows_covers_pending_and_retired_memos_but_not_strangers(tmp_path):
     assert not service.knows("new.m4a")
 
 
+def test_store_exposes_the_backing_store_itself(tmp_path):
+    # app.py's own background loops that need to act on the store directly --
+    # DriveDocReconciler chief among them, which needs exactly the list_retired()/
+    # update() a store already offers -- share this one connection/lock rather than
+    # opening a second one of their own onto the same file.
+    store = MemoStore(tmp_path / "memos.db")
+    service = InboxService(
+        inbox_dir=tmp_path / "inbox", store=store, transcriber=FakeTranscriber(),
+        bin_dir=tmp_path / "bin",
+    )
+
+    assert service.store is store
+
+
 def test_refresh_can_wait_for_the_running_scan_instead_of_skipping(tmp_path):
     # The upload endpoint fires a refresh per landed recording. A burst of
     # pushes overlaps: the in-flight scan snapshotted the inbox before the
