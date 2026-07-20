@@ -31,6 +31,14 @@ class RecordingBusy(Exception):
     """A recording the app must put down is still held open by something else on the PC."""
 
 
+class Abandoned(Exception):
+    """The recording being transcribed was thrown away while the model was reading it.
+
+    Raised out of the progress callback, which is the only moment the scan gets a word
+    in between pieces — so the read stops at the next piece boundary instead of working
+    through to the end of a recording nobody wants."""
+
+
 @dataclass(frozen=True)
 class Incoming:
     """A recording in the inbox that isn't a memo yet, as the row standing in its place
@@ -243,6 +251,8 @@ class InboxService:
                     created_at=self._clock(),
                     recorded_at=self._recorded_time(adopted),
                 ))
+            except Abandoned:
+                pass  # thrown away mid-read: it is in the bin, and there is nothing to store
             except Exception as exc:  # noqa: BLE001 — one bad recording must not strand the rest
                 # A single unreadable or half-downloaded recording used to abort the whole
                 # scan, hiding every recording sorted after it until that one file finally
@@ -266,8 +276,15 @@ class InboxService:
         return audio_filename in self._store.known_filenames()
 
     def _reads(self, recording):
-        """The callback the transcriber tells how much of this recording it has heard."""
+        """The callback the transcriber tells how much of this recording it has heard.
+
+        It is also the one moment the scan gets a word in mid-read, so it is where a
+        recording thrown away in the meantime is noticed: the store holding a memo for
+        it is the click having landed (see discard), and the model is stopped there
+        rather than reading out the rest of a recording nobody wants."""
         def heard(done):
+            if self._store.get(recording.name) is not None:
+                raise Abandoned(recording.name)
             self._reading = (recording.name, done)
 
         self._reading = (recording.name, 0.0)

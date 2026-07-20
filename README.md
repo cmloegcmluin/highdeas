@@ -83,6 +83,8 @@ recording, or a subtask on an Asana task.
    what a recording left running by accident is caught by: forty minutes on the player's
    clock says what it is long before a word of it has been read, and the bin drops it —
    into the bin like anything else, restorable — without the model spending itself on it.
+   If the read has already started, it is called off at the next piece boundary rather
+   than working through to the end of a recording nobody wants.
    Beside the player, the place the transcript will go fills up as the model reads: a
    percentage and a bar, counting the seconds of the recording actually heard rather than
    guessing at the clock, so a long one is visibly working rather than visibly hung.

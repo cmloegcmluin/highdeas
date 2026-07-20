@@ -662,6 +662,37 @@ def test_a_recording_thrown_away_mid_transcription_stays_thrown_away(tmp_path):
     assert [(m.audio_filename, m.status) for m in service.binned()] == [(key, "deleted")]
 
 
+def test_a_recording_thrown_away_mid_read_stops_the_model_where_it_stands(tmp_path):
+    # Forty minutes takes the model minutes to read, and not spending them is the whole
+    # point of being able to throw the recording away from its row. So the read is given
+    # up at the first piece boundary after the click, rather than working through to the
+    # end of a recording nobody wants and discarding the answer.
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"ACCIDENT")
+    key = recording_key(inbox / "voice.m4a")
+    store = MemoStore(tmp_path / "memos.db")
+    read = []
+
+    class ReadsInPieces:
+        def transcribe(self, path, progress=None):
+            for done in (0.25, 0.5, 0.75, 1.0):
+                read.append(done)
+                if done == 0.25:
+                    service.discard(key)  # the click lands while the first piece is read
+                progress(done)
+            return Transcript("forty minutes of nothing")
+
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=ReadsInPieces(),
+                           bin_dir=tmp_path / "bin", clock=lambda: "2026-07-19T17:00:00")
+
+    service.refresh()
+
+    assert read == [0.25]  # one piece, then given up — not all four
+    assert service.pending() == []
+    assert [(m.audio_filename, m.status) for m in service.binned()] == [(key, "deleted")]
+
+
 def test_the_scan_leaves_a_memo_that_settled_while_it_was_reading(tmp_path):
     # Transcription is slow, and the store can gain a memo for this very recording
     # while it runs: the row emptied by hand, or the other desk's memo syncing in.

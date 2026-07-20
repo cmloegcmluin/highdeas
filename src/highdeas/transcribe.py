@@ -114,7 +114,12 @@ class HearsAnyLength:
     Hearing one in pieces is also the only honest place to count how far along it is,
     which is what `progress` is called with after each: the fraction of the recording
     read so far, so the page has a real number to show rather than a guess at the
-    clock. A recording that fits says so once, when it is read."""
+    clock. A recording that fits says so once, when it is read.
+
+    It is the only word the caller gets in mid-read, so it is also how a read is called
+    off: raise out of `progress` and the rest of the recording goes unread. That is what
+    throwing a recording away from its row does (service.Abandoned) — the minutes a long
+    one costs are the reason it can be thrown away before it is read at all."""
 
     def __init__(self, model):
         self._model = model
