@@ -20,6 +20,12 @@ recording, or a subtask on an Asana task.
    takes the capital it was carrying. Only a whole word of the sound counts, so
    *umbrella* and *uh-huh* survive it.
 
+   A long recording is heard in pieces. The model's exported encoder refuses anything
+   past 400 seconds outright — it fails rather than answering short — so a longer one is
+   transcribed six minutes at a time and put back together, word timings and all. Each
+   cut lands on the quietest moment it can reach, so a seam falls in a pause rather than
+   through the middle of a word.
+
    The model also rarely returns nothing when it heard no speech — humming comes back as
    filler ("Mm-hmm"), noise as a confident hallucination (sometimes in another script).
    So its text is relabelled before storing: an all-humming note reads `[singing]` (a run

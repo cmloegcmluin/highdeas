@@ -2,8 +2,11 @@
 import re
 import subprocess
 import tempfile
+import wave
 from dataclasses import dataclass
 from pathlib import Path
+
+import numpy
 
 from highdeas.audio import NO_WINDOW as _NO_WINDOW
 from highdeas.audio import locate_ffmpeg as _default_ffmpeg
@@ -32,12 +35,95 @@ def decode_to_wav(src, *, out_dir=None, ffmpeg_exe=None, runner=subprocess.run,
 
 DEFAULT_MODEL = "nemo-parakeet-tdt-0.6b-v3"
 
+# How much of a recording the model will take in one go. Its exported encoder carries
+# a positional table 5000 frames wide — 400 seconds at the encoder's 80ms stride — and
+# anything longer fails outright ("Attempting to broadcast an axis by a dimension other
+# than 1"), on every scan, forever. So a longer recording is heard in pieces this size,
+# which leaves room to spare under that ceiling.
+HEARABLE_SECONDS = 360.0
+# How far back from that ceiling to hunt for the quietest moment to end a piece on, and
+# how long a stretch is judged for quiet. A seam that falls in a pause costs the
+# transcript nothing; one through the middle of a word costs it that word twice, garbled
+# at the end of one piece and again at the start of the next.
+_PAUSE_HUNT_SECONDS = 45.0
+_PAUSE_SECONDS = 0.25
+
 
 @dataclass(frozen=True)
 class TimedWord:
     """A spoken word and the second, into the recording, that it starts on."""
     start: float
     text: str
+
+
+@dataclass(frozen=True)
+class Recognition:
+    """What the model made of a recording: the text, the sub-word tokens it decoded,
+    and the second each was spoken at. The shape onnx-asr hands back, so a recording
+    heard in pieces reads exactly like one heard in a single go."""
+    text: str
+    tokens: tuple = ()
+    timestamps: tuple = ()
+
+
+def _read_wav(path):
+    """A decoded recording as float32 in [-1, 1], with its sample rate — what onnx-asr
+    would read off the file itself, read here so a long one can be handed over a piece
+    at a time. `decode_to_wav` is the only writer of these, and it writes 16-bit mono."""
+    with wave.open(str(path), "rb") as recording:
+        rate = recording.getframerate()
+        frames = recording.readframes(recording.getnframes())
+    return numpy.frombuffer(frames, dtype="<i2").astype(numpy.float32) / 32768.0, rate
+
+
+def _quietest(samples, first, last, width):
+    """The middle of the quietest `width`-long stretch of `samples[first:last]`."""
+    at = min(range(first, last - width + 1, width),
+             key=lambda start: numpy.abs(samples[start:start + width]).max())
+    return at + width // 2
+
+
+def _seams(samples, rate):
+    """Where to cut a recording the model can't hear in one go, as sample offsets.
+
+    Each piece runs as near the ceiling as it can while still ending on a pause, so
+    every piece is hearable and no seam falls through the middle of a word."""
+    span, hunt, pause = (int(seconds * rate) for seconds in
+                         (HEARABLE_SECONDS, _PAUSE_HUNT_SECONDS, _PAUSE_SECONDS))
+    seams, at = [], 0
+    while len(samples) - at > span:
+        at = _quietest(samples, at + span - hunt, at + span, pause)
+        seams.append(at)
+    return seams
+
+
+def _pieces(samples, rate):
+    """A recording in stretches the model can take, each paired with the second it
+    starts at. One stretch — the whole recording — when it already fits."""
+    edges = [0, *_seams(samples, rate), len(samples)]
+    return [(at / rate, samples[at:until]) for at, until in zip(edges, edges[1:])]
+
+
+class HearsAnyLength:
+    """The ASR model, able to take a recording of any length.
+
+    Past `HEARABLE_SECONDS` the model refuses a recording rather than shortening its
+    answer, so a long one is heard in pieces and the pieces put back together — each
+    piece's word timings slid to where in the recording that piece starts."""
+
+    def __init__(self, model):
+        self._model = model
+
+    def recognize(self, wav):
+        samples, rate = _read_wav(wav)
+        heard = [(at, self._model.recognize(piece, sample_rate=rate))
+                 for at, piece in _pieces(samples, rate)]
+        return Recognition(
+            text=" ".join(said.text for _, said in heard if said.text),
+            tokens=tuple(token for _, said in heard for token in said.tokens or ()),
+            timestamps=tuple(round(at + stamp, 3) for at, said in heard
+                             for stamp in said.timestamps or ()),
+        )
 
 
 @dataclass(frozen=True)
@@ -55,7 +141,8 @@ def _load_parakeet(name):
     # recording plays. Transcription is CPU-by-design on every platform: left to
     # choose, onnxruntime picks CoreML on macOS, which fails to initialize this
     # external-data model ("model_path must not be empty").
-    return onnx_asr.load_model(name, providers=["CPUExecutionProvider"]).with_timestamps()
+    return HearsAnyLength(
+        onnx_asr.load_model(name, providers=["CPUExecutionProvider"]).with_timestamps())
 
 
 def _to_words(tokens, timestamps):

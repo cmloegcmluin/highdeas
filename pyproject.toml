@@ -12,6 +12,9 @@ dependencies = [
     "python-dotenv>=1",
     "python-docx>=1",
     "onnx-asr[cpu,hub]>=0.11",
+    # Already onnx-asr's own, but transcribe.py hands the model a recording a piece at
+    # a time (see HEARABLE_SECONDS) and slices those pieces itself, so it is ours too.
+    "numpy>=1.26",
     "imageio-ffmpeg>=0.4",
     # Signs the read of the names sheet, and the Drive subfolder-link lookup, as a
     # service account. Optional in practice: a machine without it falls back to the
