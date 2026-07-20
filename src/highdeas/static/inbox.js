@@ -807,7 +807,32 @@
     });
   }
 
+  // The bin on an outline throws the recording away before anything has read it — the
+  // point of putting its audio there in the first place: a recording left running by
+  // accident is recognisable by its length alone, and this drops it without the model
+  // spending itself on it. No memo exists yet, so it can't go through /delete; it is
+  // named by the key it would have been stored under. The window remembers it as gone
+  // for the same reason a trashed row is: a poll snapshot taken before this landed still
+  // lists it, and would otherwise put the outline straight back.
+  function wireOutline(outline) {
+    var del = outline.querySelector('.del');
+    if (!del) return;
+    del.addEventListener('click', function () {
+      clearNotice();
+      del.disabled = true;
+      post('/discard/' + encodeURIComponent(outline.dataset.file)).then(function (r) {
+        if (!r.ok) throw new Error('Failed');
+        retired[outline.dataset.file] = true;
+        removeRow(outline);
+      }).catch(function () {
+        del.disabled = false;
+        notify("Couldn't throw that recording away — it's still in your inbox.");
+      });
+    });
+  }
+
   rows().forEach(wire);
+  outlines().forEach(wireOutline);
   resync();
 
   // Run an action over the rows one at a time — not a 20-wide burst at the local
@@ -872,6 +897,38 @@
     return !!(audio && !audio.paused);
   }
 
+  function outlines() {
+    return Array.prototype.slice.call(content.querySelectorAll('.transcribing'));
+  }
+
+  // The outlines of recordings not yet taken in, reconciled against the server's the same
+  // way the notes are: by the recording each names. They used to be swapped as a set
+  // whenever their number changed, which costs nothing while an outline is a few grey
+  // boxes and everything now one holds a player — a swap mid-scrub takes the audio out
+  // from under the listen that is deciding whether to keep the recording at all. So an
+  // outline whose recording has become a memo goes, one that has just landed joins, and
+  // every one that is still waiting is left exactly as it stands. They stand where rows
+  // will be, so they join at the top, above every real row.
+  function mergeOutlines(incoming, grid) {
+    var arriving = {};
+    incoming.querySelectorAll('.transcribing').forEach(function (el) {
+      if (!retired[el.dataset.file]) arriving[el.dataset.file] = el;
+    });
+    var changed = false;
+    outlines().forEach(function (el) {
+      if (arriving[el.dataset.file]) { delete arriving[el.dataset.file]; return; }
+      el.remove();
+      changed = true;
+    });
+    var lead = grid.firstChild;
+    Object.keys(arriving).forEach(function (file) {
+      grid.insertBefore(arriving[file], lead);
+      wireOutline(arriving[file]);
+      changed = true;
+    });
+    return changed;
+  }
+
   function merge(html) {
     // Never repaint the list out from under a drag in progress. A row this poll would
     // replace or remove could be the very one in the air — the other machine retired or
@@ -883,22 +940,8 @@
     incoming.innerHTML = html;
     var grid = content.querySelector('.grid');
     var changed = false;
-    // The outlines of recordings still being transcribed live outside the row merge: they
-    // hold no state worth preserving — nothing typed into one, nothing focused — so the
-    // server's set replaces the page's whole rather than being reconciled one at a time.
-    // One recording fewer is one outline fewer, and the row that took its place arrives in
-    // the same pass. They stand where rows will be, so they go back in at the top, above
-    // every real row. An outline appears the moment a recording lands, which is what spares
-    // the gap between the phone letting go and the row existing.
-    var outlines = incoming.querySelectorAll('.transcribing');
-    var standing = content.querySelectorAll('.transcribing');
-    if (outlines.length !== standing.length) {
-      if (!grid) { location.reload(); return; }  // no list yet: reload to build it and the frozen header
-      standing.forEach(function (el) { el.remove(); });
-      var lead = grid.firstChild;
-      outlines.forEach(function (outline) { grid.insertBefore(outline, lead); });
-      changed = true;
-    }
+    if (!grid && incoming.querySelector('.transcribing')) { location.reload(); return; }
+    if (grid && mergeOutlines(incoming, grid)) changed = true;
     var arriving = {};
     incoming.querySelectorAll('.memo').forEach(function (memo) {
       arriving[memo.dataset.file] = memo;

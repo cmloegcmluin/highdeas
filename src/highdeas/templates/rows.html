@@ -19,16 +19,24 @@
       the real row lands in it. They sit on the grid's own columns, at the top where the
       newest note goes. Ride the /pending fragment too — inbox.js swaps the set by itself,
       outside the row merge, and counts none of them as notes. -#}
-  {% for _ in range(incoming) %}
+  {#- The audio is real from the start, and the bin beside it too: a recording left
+      running by accident is forty minutes of nothing, and the player says so — length
+      and all — long before a word of it has been read. The rest of the row is still a
+      fill, since nothing else about the note is known yet. It plays from the name the
+      recording landed under; the row it becomes plays from the key, which is why the
+      two are carried separately and why the bin posts the key. -#}
+  {% for r in incoming %}
   {% if not loop.first %}<div class="sep"></div>{% endif %}
-  <div class="transcribing">
+  <div class="transcribing" data-file="{{ r.name }}">
     <div></div>
     <div class="transcribing-mark short"></div>
-    <div class="transcribing-mark"></div>
+    <audio controls src="{{ url_for('audio', filename=r.source) }}"></audio>
     <div class="transcribing-note">Transcribing…</div>
     <div></div>
     <div class="transcribing-mark"></div>
     <div class="transcribing-mark short"></div>
+    <div></div>
+    <button type="button" class="btn icon del danger" title="Delete" aria-label="Delete">{{ trash() }}</button>
   </div>
   {% endfor %}
   {% for m in memos %}

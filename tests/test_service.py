@@ -550,26 +550,105 @@ def test_concurrent_refreshes_transcribe_each_recording_once(tmp_path):
     assert len(store.list_pending()) == 1
 
 
-def test_incoming_count_counts_the_untranscribed_recordings(tmp_path):
+def test_incoming_names_each_untranscribed_recording_and_where_to_play_it(tmp_path):
+    # The row a recording stands in before it is a memo now carries its audio, so the
+    # page needs more than a count: the file to play it from — still under the name it
+    # landed with — and the key it will answer to once it is one, which is what a click
+    # on its bin has to name.
     inbox = tmp_path / "inbox"
     inbox.mkdir()
     (inbox / "voice.m4a").write_bytes(b"A")
-    (inbox / "voice2.m4a").write_bytes(b"B")
     store = MemoStore(tmp_path / "memos.db")
-    service = InboxService(inbox_dir=inbox, store=store,
-                            transcriber=FakeTranscriber(), bin_dir=tmp_path / "bin")
+    service = InboxService(
+        inbox_dir=inbox, store=store, transcriber=FakeTranscriber(), bin_dir=tmp_path / "bin",
+        find_new=lambda inbox_dir, known: [NewRecording(inbox / "voice.m4a", "voice-key.m4a")])
 
-    assert service.incoming_count() == 2
+    assert [(r.name, r.source) for r in service.incoming()] == [("voice-key.m4a", "voice.m4a")]
 
 
-def test_incoming_count_is_zero_when_the_inbox_is_drained(tmp_path):
+def test_incoming_is_empty_when_the_inbox_is_drained(tmp_path):
     inbox = tmp_path / "inbox"
     inbox.mkdir()
     store = MemoStore(tmp_path / "memos.db")
     service = InboxService(inbox_dir=inbox, store=store,
                             transcriber=FakeTranscriber(), bin_dir=tmp_path / "bin")
 
-    assert service.incoming_count() == 0
+    assert service.incoming() == []
+
+
+def test_discard_bins_a_recording_before_it_is_ever_transcribed(tmp_path):
+    # A recording left running by accident is recognisable from its audio alone, so its
+    # row can be emptied before the model spends itself reading forty minutes of nothing.
+    # It becomes a memo only far enough to be thrown away as one — in the bin, restorable,
+    # and known to the store, so the next scan doesn't adopt it all over again.
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"ACCIDENT")
+    key = recording_key(inbox / "voice.m4a")
+    store = MemoStore(tmp_path / "memos.db")
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=FakeTranscriber(),
+                           bin_dir=tmp_path / "bin", clock=lambda: "2026-07-19T17:00:00")
+
+    service.discard(key)
+
+    assert service.incoming() == []
+    assert (tmp_path / "bin" / key).read_bytes() == b"ACCIDENT"
+    assert [(m.audio_filename, m.status) for m in service.binned()] == [(key, "deleted")]
+
+    service.refresh()
+
+    assert service.pending() == []  # and the scan leaves it thrown away
+
+
+def test_a_recording_thrown_away_mid_transcription_stays_thrown_away(tmp_path):
+    # The scan can already be reading a recording when its row is emptied — for a long
+    # one that is the likely case, since the row is there to be judged the moment it
+    # lands. Whatever the model then says belongs to a memo that has already gone to the
+    # bin, so the scan must leave the store as it found it rather than writing the note
+    # back into the inbox, playing a recording that is no longer in it.
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"ACCIDENT")
+    key = recording_key(inbox / "voice.m4a")
+    store = MemoStore(tmp_path / "memos.db")
+
+    class ThrownAwayMidway:
+        def transcribe(self, path):
+            service.discard(key)
+            return Transcript("forty minutes of nothing")
+
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=ThrownAwayMidway(),
+                           bin_dir=tmp_path / "bin", clock=lambda: "2026-07-19T17:00:00")
+
+    service.refresh()
+
+    assert service.pending() == []
+    assert [(m.audio_filename, m.status) for m in service.binned()] == [(key, "deleted")]
+
+
+def test_the_scan_leaves_a_memo_that_settled_while_it_was_reading(tmp_path):
+    # Transcription is slow, and the store can gain a memo for this very recording
+    # while it runs: the row emptied by hand, or the other desk's memo syncing in.
+    # Either way what the scan is still holding is older than what is there now, and
+    # writing it would clobber a note somebody else has already settled.
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "voice.m4a").write_bytes(b"A")
+    key = recording_key(inbox / "voice.m4a")
+    store = MemoStore(tmp_path / "memos.db")
+
+    class SettledMidway:
+        def transcribe(self, path):
+            store.upsert(Memo(audio_filename=key, transcript="as somebody else settled it",
+                              status="pending"))
+            return Transcript("what the model heard")
+
+    service = InboxService(inbox_dir=inbox, store=store, transcriber=SettledMidway(),
+                           bin_dir=tmp_path / "bin")
+
+    service.refresh()
+
+    assert [m.transcript for m in service.pending()] == ["as somebody else settled it"]
 
 
 def _two_notes(tmp_path, first=b"AAA", second=b"BB"):

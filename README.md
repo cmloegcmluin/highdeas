@@ -76,8 +76,15 @@ recording, or a subtask on an Asana task.
    note lands under), and Submit / Delete. Drag a row by its grip to reorder the list; the
    row rides under the cursor while you move it. A live item count and a frozen title bar
    + column headers (carrying **Submit all** / **Trash all**) stay in reach as the list
-   scrolls. Recordings that arrive while the page is open are polled in automatically. A
-   **find** box sits in the title bar between the count and the buttons — its magnifier
+   scrolls. Recordings that arrive while the page is open are polled in automatically.
+
+   A recording that has landed but isn't transcribed yet holds the place its row will
+   take, and holds it with the recording already playable and a bin beside it. That is
+   what a recording left running by accident is caught by: forty minutes on the player's
+   clock says what it is long before a word of it has been read, and the bin drops it —
+   into the bin like anything else, restorable — without the model spending itself on it.
+
+   A **find** box sits in the title bar between the count and the buttons — its magnifier
    there from the start, **Ctrl+F** just putting the cursor in it: type and the list
    narrows to the notes whose name or transcript holds it, reaching the whole transcript
    (the part the three-line preview clips off included, which the browser's own find can't

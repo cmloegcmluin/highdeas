@@ -79,7 +79,7 @@ def create_app(service, inbox_dir, bin_dir, open_link=None, asana_parents=(), cl
         so anything handed to only one of them goes missing from the other two: a dropdown
         renders empty, and a merge wipes the outlines of the recordings being transcribed
         off the page. One call answers all three."""
-        return {"memos": service.pending(), "incoming": service.incoming_count(),
+        return {"memos": service.pending(), "incoming": service.incoming(),
                 "asana_parents": asana_parents, "claude_models": claude_models}
 
     def _inbox_rows():
@@ -248,6 +248,14 @@ def create_app(service, inbox_dir, bin_dir, open_link=None, asana_parents=(), cl
     @app.post("/delete/<path:filename>")
     def delete(filename):
         service.delete(filename)
+        return ("", 204)
+
+    @app.post("/discard/<path:filename>")
+    def discard(filename):
+        """Throw away a recording that has landed but has no memo yet — what the bin on
+        a still-transcribing row posts. Named by the key it will be stored under, not by
+        the name it currently sits on disk as: that name is about to change."""
+        service.discard(filename)
         return ("", 204)
 
     @app.get("/bin")

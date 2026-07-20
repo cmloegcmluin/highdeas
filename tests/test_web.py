@@ -1,9 +1,15 @@
 import time
 from datetime import datetime
 
+from highdeas.service import Incoming
 from highdeas.store import Memo
 from highdeas.transcribe import Transcript
 from highdeas.web import create_app
+
+
+def _landed(source, name=None):
+    """A recording sitting in the inbox that no scan has taken in yet."""
+    return Incoming(name=name or source, source=source)
 
 
 def asset(client, filename):
@@ -14,10 +20,11 @@ def asset(client, filename):
 
 
 class FakeService:
-    def __init__(self, pending=(), binned=(), incoming=0):
+    def __init__(self, pending=(), binned=(), incoming=()):
         self._pending = list(pending)
         self._binned = list(binned)
-        self._incoming = incoming
+        self._incoming = list(incoming)
+        self.discarded = []
         self.refreshed = 0
         self.edits = []
         self.submitted = []
@@ -74,8 +81,11 @@ class FakeService:
     def pending(self):
         return self._pending
 
-    def incoming_count(self):
+    def incoming(self):
         return self._incoming
+
+    def discard(self, audio_filename):
+        self.discarded.append(audio_filename)
 
     def get(self, audio_filename):
         for memo in self._pending + self._binned:
@@ -656,22 +666,18 @@ def test_the_live_poll_leaves_alone_the_row_whose_editor_is_open(tmp_path):
     assert "memo === editing" in js.split("function busy(memo)")[1].split("\n  }")[0]
 
 
-def test_the_poll_replaces_the_outlines_whole_and_keeps_them_above_the_rows(tmp_path):
+def test_the_poll_keeps_the_outlines_above_the_rows_and_the_empty_list_honest(tmp_path):
     client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     js = asset(client, "inbox.js")
 
-    # An outline holds no state worth preserving — no edit, no focus, nothing typed — so the
-    # server's set replaces the page's whole rather than being reconciled one at a time. One
-    # recording fewer is one outline fewer, and the row that took its place arrives in the
-    # same pass. They stand where rows will be, so they go back in above every real one.
-    merge = js.split("function merge(html)")[1].split("function check(")[0]
-    assert "querySelectorAll('.transcribing')" in merge
-    assert "grid.insertBefore(outline, lead)" in merge
+    # An outline stands where a row will be, so a newly landed recording joins at the top,
+    # above every real one — the same place the server sorts the note it becomes.
+    assert "grid.insertBefore(arriving[file], lead)" in js.split("function mergeOutlines")[1]
     # The list can empty without anyone here touching it — the last note retired from the
     # other machine, the last waiting recording gone without ever becoming one — and left
     # to itself it stood as a bare grid under its column headers, saying nothing.
-    assert "showEmpty()" in merge
+    assert "showEmpty()" in js.split("function merge(html)")[1].split("function check(")[0]
 
 
 def test_a_search_takes_the_outlines_out_with_the_rows_it_misses(tmp_path):
@@ -1525,7 +1531,7 @@ def test_the_list_stands_up_for_a_recording_that_has_no_row_yet(tmp_path):
     # the list its outline sits in — column headers and all — rather than the misleading
     # "Your inbox is empty". An outline off the grid would sit on none of the columns its
     # row is about to land on, which is the whole point of it.
-    service = FakeService(pending=[], incoming=1)
+    service = FakeService(pending=[], incoming=[_landed("voice.m4a")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     body = client.get("/").data.decode()
@@ -1542,7 +1548,8 @@ def test_a_landed_recording_holds_its_own_place_before_transcription_finishes(tm
     # take from the moment it exists: one outline apiece, so two waiting recordings read
     # as two notes coming rather than one sentence about them. It rides the /pending
     # fragment so the open page picks it up on the next poll.
-    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")], incoming=2)
+    service = FakeService(pending=[Memo(audio_filename="a.m4a", transcript="hi")],
+                          incoming=[_landed("voice.m4a"), _landed("voice-2.m4a")])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     page = client.get("/").data.decode()
@@ -1555,6 +1562,68 @@ def test_a_landed_recording_holds_its_own_place_before_transcription_finishes(tm
     # rows, where the newest note goes.
     assert page.index("grid inbox body") < page.index('class="transcribing"')
     assert page.index('class="transcribing"') < page.index('class="memo"')
+
+
+def test_a_landed_recording_can_be_heard_and_thrown_away_before_it_is_transcribed(tmp_path):
+    # A recording left running by accident is forty minutes of nothing, and its length
+    # says so long before a word of it is read. So the place its row will take carries
+    # the recording itself — played from the name it landed under, which is not yet the
+    # key it will be stored as — and the bin that throws it away by that key.
+    service = FakeService(pending=[], incoming=[_landed("voice.m4a", "voice-key.m4a")])
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    for body in (client.get("/").data.decode(), client.get("/pending").data.decode()):
+        assert '<audio controls src="/audio/voice.m4a"></audio>' in body
+        outline = body.split('class="transcribing"')[1].split("</div>\n  </div>")[0]
+        assert 'data-file="voice-key.m4a"' in body
+        assert 'class="btn icon del danger"' in outline
+
+
+def test_discard_throws_away_a_recording_that_never_became_a_memo(tmp_path):
+    service = FakeService()
+    client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    assert client.post("/discard/voice-key.m4a").status_code == 204
+    assert service.discarded == ["voice-key.m4a"]
+
+
+def test_an_outline_survives_the_poll_it_is_being_listened_to_through(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "inbox.js")
+
+    # The outlines were swapped as a set whenever their number changed, which costs
+    # nothing when each is a few grey boxes and everything once one holds a player being
+    # scrubbed. So they reconcile by the recording they name, the way the notes do: one
+    # that became a memo goes, one that just landed joins, and the rest are left alone.
+    reconcile = js.split("function mergeOutlines")[1].split("\n  }")[0]
+    assert "dataset.file" in reconcile
+    assert "replaceWith" not in reconcile
+
+
+def test_the_bin_on_an_outline_throws_the_recording_away_before_it_is_read(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    js = asset(client, "inbox.js")
+
+    # No memo exists yet, so it can't go through /delete — it is named by the key it
+    # would have been stored under, and the window remembers it as gone so the poll
+    # snapshot that still lists it can't put it back.
+    wiring = js.split("function wireOutline")[1].split("\n  }")[0]
+    assert "'/discard/'" in wiring
+    assert "retired[" in wiring
+
+
+def test_an_outline_breathes_only_where_it_is_still_a_placeholder(tmp_path):
+    client = create_app(FakeService(), inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
+
+    css = asset(client, "app.css")
+
+    # Its player and its bin are real controls to be used now, not marks standing for a
+    # row that hasn't arrived: pulsing them reads as a row that isn't there yet, and dims
+    # the button at the moment it is being aimed at. Only the fills breathe.
+    assert "animation: breathe" not in css.split(".transcribing {")[1].split("}")[0]
+    assert "animation: breathe" in css.split(".transcribing-note, .transcribing-mark {")[1].split("}")[0]
 
 
 def test_an_outline_is_built_to_the_size_of_the_row_it_will_become(tmp_path):
@@ -1574,7 +1643,7 @@ def test_an_outline_is_built_to_the_size_of_the_row_it_will_become(tmp_path):
 
 
 def test_index_shows_empty_state_when_the_inbox_is_idle(tmp_path):
-    service = FakeService(pending=[], incoming=False)
+    service = FakeService(pending=[])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     body = client.get("/").data
@@ -1610,7 +1679,7 @@ def test_index_offers_a_manual_refresh_left_of_the_bin_button_even_when_empty(tm
     # hasn't surfaced yet. It sits just left of the Bin button and lives in the topbar,
     # not the memo list, so it's there even while the page is empty and waiting for
     # the very first note.
-    service = FakeService(pending=[], incoming=False)
+    service = FakeService(pending=[])
     client = create_app(service, inbox_dir=str(tmp_path), bin_dir=str(tmp_path / "bin")).test_client()
 
     body = client.get("/").data.decode()

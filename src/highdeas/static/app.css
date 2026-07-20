@@ -133,16 +133,20 @@ body:has(#empty-bin:not(:disabled):hover) .row .purge:not(:disabled) { border-co
    and nothing below it moves.
 
    Quiet, not an alert: this is the system working, shown so the note visibly exists
-   somewhere during the seconds between the phone letting go and transcription finishing.
-   It breathes rather than sitting still, because the one thing an outline must not read
-   as is a row that has arrived and come up empty. */
+   somewhere during the seconds between the phone letting go and transcription finishing. */
 .transcribing { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;
-                align-items: start; animation: breathe 2s ease-in-out infinite; }
+                align-items: start; }
 @keyframes breathe { 50% { opacity: .5; } }
 /* The cells, as much of each as an outline owes: a fill where a control will be, and no
    chrome of its own — a bordered box would read as a field you could type in. The note's
-   is the one that speaks, and the one that sets the height. */
-.transcribing-note, .transcribing-mark { border-radius: 8px; background: rgba(128,128,128,.14); }
+   is the one that speaks, and the one that sets the height.
+
+   These breathe rather than sitting still, because the one thing an outline must not
+   read as is a row that has arrived and come up empty. Only these: the outline's player
+   and its bin are real controls, to be used now rather than waited on, and a button that
+   dims as it is aimed at reads as a row that isn't there yet. */
+.transcribing-note, .transcribing-mark { border-radius: 8px; background: rgba(128,128,128,.14);
+                                         animation: breathe 2s ease-in-out infinite; }
 .transcribing-note { box-sizing: border-box; height: var(--preview); padding: 8px;
                      font-size: .9rem; font-style: italic; opacity: .75; }
 .transcribing-mark { height: 34px; }

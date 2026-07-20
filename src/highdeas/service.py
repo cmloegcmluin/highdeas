@@ -6,6 +6,7 @@ import json
 import shutil
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,6 +29,16 @@ _LETGO_WAIT = 0.15
 
 class RecordingBusy(Exception):
     """A recording the app must put down is still held open by something else on the PC."""
+
+
+@dataclass(frozen=True)
+class Incoming:
+    """A recording in the inbox that isn't a memo yet, as the row standing in its place
+    needs it: `source` is the file to play it from, still under the name it landed with,
+    and `name` is the content key it will be stored under — the name its bin has to give
+    when a recording is recognised as an accident and dropped before the model reads it."""
+    name: str
+    source: str
 
 
 def _no_router(memo):
@@ -208,6 +219,12 @@ class InboxService:
             try:
                 adopted = self._adopt(recording)
                 spoken = self._transcriber.transcribe(adopted)
+                # Transcription is slow, and the store can gain a memo for this very
+                # recording while it runs — the row emptied by hand (see discard), or
+                # the other desk's memo syncing in. What the scan is holding is then
+                # the older of the two, and writing it would clobber a settled note.
+                if self._store.get(recording.name) is not None:
+                    continue
                 self._store.upsert(Memo(
                     audio_filename=recording.name,
                     transcript=spoken.text,
@@ -236,13 +253,15 @@ class InboxService:
         recording is confirmed instead of landing as an orphan file."""
         return audio_filename in self._store.known_filenames()
 
-    def incoming_count(self):
-        """How many recordings sit in the inbox but not yet in the store, so the
-        page can show them as "transcribing" the moment they land: the handoff
-        from the phone's list to this one must never pass through "nowhere". A
-        cheap directory scan — no model, no decoding, and nothing pulled down
-        from iCloud — so it's safe on the request path."""
-        return len(self._find_new(self._inbox_dir, self._store.known_filenames()))
+    def incoming(self):
+        """The recordings sitting in the inbox but not yet in the store, so the page can
+        show them as "transcribing" the moment they land: the handoff from the phone's
+        list to this one must never pass through "nowhere". A cheap directory scan — no
+        model, no decoding, and nothing pulled down from iCloud — so it's safe on the
+        request path."""
+        return [Incoming(name=recording.name, source=Path(recording.source).name)
+                for recording in self._find_new(self._inbox_dir,
+                                                self._store.known_filenames())]
 
     def binned(self):
         """Retired memos whose recording sits in the local bin, newest first."""
@@ -490,6 +509,27 @@ class InboxService:
 
     def delete(self, audio_filename):
         self._retire(audio_filename, "deleted")
+
+    def discard(self, audio_filename):
+        """Throw away a recording that has landed but isn't a memo yet.
+
+        Its row carries its audio from the moment it lands, so a recording left running
+        by accident can be recognised and dropped without the model reading it first. It
+        becomes a memo only far enough to be thrown away as one: an empty note, in the
+        bin with everything else that left the inbox, restorable if the click was wrong
+        — and in the store, which is what stops the next scan adopting it again."""
+        landed = next((r for r in self._find_new(self._inbox_dir,
+                                                 self._store.known_filenames())
+                       if r.name == audio_filename), None)
+        if landed is None:
+            return
+        adopted = self._adopt(landed)
+        self._store.upsert(Memo(
+            audio_filename=landed.name,
+            created_at=self._clock(),
+            recorded_at=self._recorded_time(adopted),
+        ))
+        self._retire(landed.name, "deleted")
 
     def restore(self, audio_filename):
         """Bring a binned recording back into the inbox as a pending memo.
